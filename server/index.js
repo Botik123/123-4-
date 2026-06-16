@@ -38,7 +38,7 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }
 });
 
-// Хранилище активных WebSocket подключений
+// Хранилище активных WebSocket подключений: userId -> Set(WebSocket)
 const clients = new Map();
 
 // ============= REST API =============
@@ -84,12 +84,16 @@ app.post('/login', (req, res) => {
       return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
     }
     
-    db.run('UPDATE users SET online = 1, last_seen = ? WHERE id = ?', [Date.now(), user.id]);
-    
-    res.json({
-      id: user.id,
-      username: user.username,
-      avatar: user.avatar
+    // Сначала сохраняем статус в бд, затем отдаем ответ клиенту
+    db.run('UPDATE users SET online = 1, last_seen = ? WHERE id = ?', [Date.now(), user.id], (updateErr) => {
+      if (updateErr) {
+        return res.status(500).json({ error: 'Ошибка обновления статуса авторизации' });
+      }
+      res.json({
+        id: user.id,
+        username: user.username,
+        avatar: user.avatar
+      });
     });
   });
 });
@@ -112,7 +116,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         const thumbnailPath = path.join(uploadDir, `thumb_${file.filename}`);
         await sharp(file.path).resize(200, 200, { fit: 'inside' }).toFile(thumbnailPath);
         thumbnail = `/uploads/thumb_${file.filename}`;
-      } catch (e) {}
+      } catch (e) {
+        console.error('Ошибка создания миниатюры:', e);
+      }
     } else if (file.mimetype.startsWith('video/')) {
       fileType = 'video';
     } else if (file.mimetype.startsWith('audio/')) {
@@ -139,25 +145,42 @@ app.get('/users/:userId', (req, res) => {
     'SELECT id, username, online, last_seen FROM users WHERE id != ? ORDER BY online DESC',
     [req.params.userId],
     (err, users) => {
+      if (err) return res.status(500).json({ error: 'Ошибка получения пользователей' });
       res.json(users || []);
     }
   );
 });
 
-// Получить историю сообщений
+// Получить историю сообщений (ИСПРАВЛЕНО: берет последние 200 сообщений)
 app.get('/messages/:userId/:otherUserId', (req, res) => {
   db.all(
-    `SELECT * FROM messages 
-     WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
-     ORDER BY timestamp ASC LIMIT 200`,
+    `SELECT * FROM (
+      SELECT * FROM messages 
+      WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
+      ORDER BY timestamp DESC LIMIT 200
+    ) ORDER BY timestamp ASC`,
     [req.params.userId, req.params.otherUserId, req.params.otherUserId, req.params.userId],
     (err, messages) => {
+      if (err) return res.status(500).json({ error: 'Ошибка загрузки истории сообщений' });
       res.json(messages || []);
     }
   );
 });
 
 // ============= WEBSOCKET =============
+
+// Вспомогательная функция отправки сообщения пользователю на все его открытые вкладки
+function sendToUser(userId, payload) {
+  const userSockets = clients.get(userId);
+  if (userSockets) {
+    const messageStr = JSON.stringify(payload);
+    userSockets.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(messageStr);
+      }
+    });
+  }
+}
 
 wss.on('connection', (ws) => {
   let currentUserId = null;
@@ -169,7 +192,10 @@ wss.on('connection', (ws) => {
       switch (parsed.type) {
         case 'auth':
           currentUserId = parsed.userId;
-          clients.set(currentUserId, ws);
+          if (!clients.has(currentUserId)) {
+            clients.set(currentUserId, new Set());
+          }
+          clients.get(currentUserId).add(ws);
           broadcastStatus(currentUserId, true);
           break;
           
@@ -180,85 +206,106 @@ wss.on('connection', (ws) => {
           db.run(
             `INSERT INTO messages (id, from_user, to_user, text, timestamp, read, reply_to, forwarded_from) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [messageId, parsed.from, parsed.to, parsed.text, timestamp, 0, parsed.reply_to || null, parsed.forwarded_from || null]
+            [messageId, parsed.from, parsed.to, parsed.text, timestamp, 0, parsed.reply_to || null, parsed.forwarded_from || null],
+            (err) => {
+              if (err) {
+                return ws.send(JSON.stringify({ type: 'error', message: 'Ошибка сохранения сообщения в БД' }));
+              }
+
+              const messagePayload = {
+                type: 'message',
+                id: messageId,
+                from: parsed.from,
+                to: parsed.to,
+                text: parsed.text,
+                timestamp: timestamp,
+                read: 0,
+                reply_to: parsed.reply_to
+              };
+
+              // Отправляем получателю (на все вкладки) и дублируем себе (на случай других наших вкладок)
+              sendToUser(parsed.to, messagePayload);
+              sendToUser(parsed.from, messagePayload); 
+              
+              // Подтверждаем текущей вкладке успешную отправку
+              ws.send(JSON.stringify({ type: 'message_sent', id: messageId, timestamp: timestamp }));
+            }
           );
-          
-          const recipientWs = clients.get(parsed.to);
-          if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
-            recipientWs.send(JSON.stringify({
-              type: 'message',
-              id: messageId,
-              from: parsed.from,
-              to: parsed.to,
-              text: parsed.text,
-              timestamp: timestamp,
-              read: 0,
-              reply_to: parsed.reply_to
-            }));
-          }
-          
-          ws.send(JSON.stringify({ type: 'message_sent', id: messageId, timestamp: timestamp }));
           break;
           
         case 'edit_message':
-          db.run('UPDATE messages SET text = ?, edited = 1, edited_at = ? WHERE id = ?',
-            [parsed.text, Date.now(), parsed.messageId]);
-          
-          const editRecipient = clients.get(parsed.to);
-          if (editRecipient && editRecipient.readyState === WebSocket.OPEN) {
-            editRecipient.send(JSON.stringify({
-              type: 'message_edited',
-              messageId: parsed.messageId,
-              text: parsed.text,
-              edited_at: Date.now()
-            }));
-          }
+          const editTimestamp = Date.now();
+          db.run(
+            'UPDATE messages SET text = ?, edited = 1, edited_at = ? WHERE id = ?',
+            [parsed.text, editTimestamp, parsed.messageId],
+            (err) => {
+              if (!err) {
+                const editPayload = {
+                  type: 'message_edited',
+                  messageId: parsed.messageId,
+                  text: parsed.text,
+                  edited_at: editTimestamp
+                };
+                sendToUser(parsed.to, editPayload);
+                sendToUser(currentUserId, editPayload);
+              }
+            }
+          );
           break;
           
         case 'delete_message':
-          db.run('UPDATE messages SET text = "🗑️ Сообщение удалено", deleted = 1 WHERE id = ?', [parsed.messageId]);
-          
-          const deleteRecipient = clients.get(parsed.to);
-          if (deleteRecipient && deleteRecipient.readyState === WebSocket.OPEN) {
-            deleteRecipient.send(JSON.stringify({
-              type: 'message_deleted',
-              messageId: parsed.messageId
-            }));
-          }
+          db.run(
+            'UPDATE messages SET text = "🗑️ Сообщение удалено", deleted = 1 WHERE id = ?',
+            [parsed.messageId],
+            (err) => {
+              if (!err) {
+                const deletePayload = {
+                  type: 'message_deleted',
+                  messageId: parsed.messageId
+                };
+                sendToUser(parsed.to, deletePayload);
+                sendToUser(currentUserId, deletePayload);
+              }
+            }
+          );
           break;
           
         case 'reaction':
           const reactionId = uuidv4();
+          const reactionTimestamp = Date.now();
           db.run(
             `INSERT OR REPLACE INTO message_reactions (id, message_id, user_id, reaction, timestamp) 
              VALUES (?, ?, ?, ?, ?)`,
-            [reactionId, parsed.messageId, parsed.userId, parsed.reaction, Date.now()]
+            [reactionId, parsed.messageId, parsed.userId, parsed.reaction, reactionTimestamp],
+            (err) => {
+              if (!err) {
+                const reactionPayload = {
+                  type: 'reaction',
+                  messageId: parsed.messageId,
+                  userId: parsed.userId,
+                  reaction: parsed.reaction
+                };
+                sendToUser(parsed.to, reactionPayload);
+                sendToUser(currentUserId, reactionPayload);
+              }
+            }
           );
-          
-          const reactionRecipient = clients.get(parsed.to);
-          if (reactionRecipient && reactionRecipient.readyState === WebSocket.OPEN) {
-            reactionRecipient.send(JSON.stringify({
-              type: 'reaction',
-              messageId: parsed.messageId,
-              userId: parsed.userId,
-              reaction: parsed.reaction
-            }));
-          }
           break;
           
         case 'read':
-          db.run('UPDATE messages SET read = 1 WHERE from_user = ? AND to_user = ?', [parsed.from, parsed.to]);
-          const senderWs = clients.get(parsed.from);
-          if (senderWs && senderWs.readyState === WebSocket.OPEN) {
-            senderWs.send(JSON.stringify({ type: 'message_read', from: parsed.to, to: parsed.from }));
-          }
+          db.run(
+            'UPDATE messages SET read = 1 WHERE from_user = ? AND to_user = ?',
+            [parsed.from, parsed.to],
+            (err) => {
+              if (!err) {
+                sendToUser(parsed.from, { type: 'message_read', from: parsed.to, to: parsed.from });
+              }
+            }
+          );
           break;
           
         case 'typing':
-          const targetWs = clients.get(parsed.to);
-          if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-            targetWs.send(JSON.stringify({ type: 'typing', from: parsed.from }));
-          }
+          sendToUser(parsed.to, { type: 'typing', from: parsed.from });
           break;
       }
     } catch (error) {
@@ -267,10 +314,17 @@ wss.on('connection', (ws) => {
   });
   
   ws.on('close', () => {
-    if (currentUserId) {
-      clients.delete(currentUserId);
-      db.run('UPDATE users SET online = 0, last_seen = ? WHERE id = ?', [Date.now(), currentUserId]);
-      broadcastStatus(currentUserId, false);
+    if (currentUserId && clients.has(currentUserId)) {
+      const userSockets = clients.get(currentUserId);
+      userSockets.delete(ws); // Удаляем закрывшуюся вкладку
+      
+      // Если это была последняя открытая вкладка пользователя
+      if (userSockets.size === 0) {
+        clients.delete(currentUserId);
+        db.run('UPDATE users SET online = 0, last_seen = ? WHERE id = ?', [Date.now(), currentUserId], (err) => {
+          broadcastStatus(currentUserId, false);
+        });
+      }
     }
   });
 });
@@ -283,10 +337,12 @@ function broadcastStatus(userId, isOnline) {
     last_seen: Date.now()
   });
   
-  clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(statusMessage);
-    }
+  clients.forEach((userSockets) => {
+    userSockets.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(statusMessage);
+      }
+    });
   });
 }
 
