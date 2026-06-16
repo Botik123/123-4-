@@ -40,7 +40,7 @@
 
 ```bash
 # Клонируй репозиторий
-git clone https://github.com/твой-username/messenger-analog-telegram.git
+git clone https://github.com/Botik123/123-4-
 cd messenger-analog-telegram
 
 # Установка зависимостей сервера
@@ -48,5 +48,5 @@ cd server
 npm install
 
 # Установка зависимостей клиента
-cd ../client
+cd client
 npm install
