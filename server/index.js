@@ -196,6 +196,11 @@ app.get('/messages/:userId/:otherUserId', (req, res) => {
 wss.on('connection', (ws) => {
   let currentUserId = null;
 
+  // Обработка pong от клиента
+  ws.on('pong', () => {
+    // Соединение живо, ничего не делаем
+  });
+
   ws.on('message', async (data) => {
     try {
       const parsed = JSON.parse(data);
@@ -496,19 +501,6 @@ wss.on('connection', (ws) => {
   ws.on('error', (error) => {
     console.error('WebSocket error:', error);
   });
-});
-
-// Ping/Pong для обнаружения мёртвых соединений
-const pingInterval = setInterval(() => {
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.ping();
-    }
-  });
-}, 30000);
-
-wss.on('close', () => {
-  clearInterval(pingInterval);
 });
 
 function broadcastStatus(userId, isOnline) {

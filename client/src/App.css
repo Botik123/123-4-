@@ -1609,3 +1609,433 @@ body {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.2);
 }
+/* ============================================
+   ТЁМНАЯ ТЕМА
+   ============================================ */
+[data-theme="dark"] {
+  --tg-bg: #0f0f1a;
+  --tg-bg-dark: #1a1a2e;
+  --tg-white: #1e1e32;
+  --tg-text: #e8e8f0;
+  --tg-text-secondary: #a0a0b8;
+  --tg-text-light: #6b6b85;
+  --tg-border: #2a2a42;
+  --tg-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  --tg-shadow-hover: 0 4px 24px rgba(0, 0, 0, 0.5);
+  --tg-primary-light: #0a1a2a;
+  --tg-gradient-msg-received: #2a2a42;
+}
+
+[data-theme="dark"] .auth-box {
+  background: rgba(30, 30, 50, 0.95);
+}
+
+[data-theme="dark"] .auth-box input {
+  background: #1a1a32;
+  border-color: #2a2a42;
+  color: #e8e8f0;
+}
+
+[data-theme="dark"] .auth-box input:focus {
+  border-color: var(--tg-primary);
+}
+
+[data-theme="dark"] .message.received .bubble {
+  background: #2a2a42;
+  border-color: #3a3a52;
+  color: #e8e8f0;
+}
+
+[data-theme="dark"] .message-actions {
+  background: #2a2a42;
+  border-color: #3a3a52;
+}
+
+[data-theme="dark"] .message-actions button:hover {
+  background: #3a3a52;
+}
+
+[data-theme="dark"] .reactions-picker {
+  background: #2a2a42;
+  border-color: #3a3a52;
+}
+
+[data-theme="dark"] .reactions-picker button:hover {
+  background: #3a3a52;
+}
+
+[data-theme="dark"] .reactions-display .reaction {
+  background: #2a2a42;
+  border-color: #3a3a52;
+}
+
+[data-theme="dark"] .reply-preview-inline {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .file-message .file-card {
+  background: #2a2a42;
+  border-color: #3a3a52;
+}
+
+[data-theme="dark"] .file-message .file-card:hover {
+  background: #3a3a52;
+}
+
+[data-theme="dark"] .search-bar input {
+  background: #1a1a32;
+  color: #e8e8f0;
+}
+
+[data-theme="dark"] .search-bar input::placeholder {
+  color: #6b6b85;
+}
+
+[data-theme="dark"] .reply-bar {
+  background: #1a1a32;
+  border-color: #2a2a42;
+}
+
+/* ============================================
+   ЭМОДЗИ-ПИКЕР
+   ============================================ */
+.emoji-picker {
+  position: absolute;
+  bottom: 70px;
+  left: 10px;
+  background: var(--tg-white);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  box-shadow: var(--tg-shadow-hover);
+  border: 1px solid var(--tg-border);
+  z-index: 20;
+  max-width: 300px;
+}
+
+.emoji-picker button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 24px;
+  padding: 4px;
+  border-radius: 8px;
+  transition: var(--tg-transition);
+}
+
+.emoji-picker button:hover {
+  background: var(--tg-bg);
+  transform: scale(1.1);
+}
+
+.input-area {
+  position: relative;
+}
+
+/* ============================================
+   REPLY PREVIEW INLINE
+   ============================================ */
+.reply-preview-inline {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  border-left: 3px solid var(--tg-primary);
+}
+
+.message.sent .reply-preview-inline {
+  background: rgba(255, 255, 255, 0.12);
+  border-left-color: rgba(255, 255, 255, 0.4);
+}
+
+.reply-preview-inline .reply-preview-label {
+  font-size: 11px;
+  color: var(--tg-primary);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.message.sent .reply-preview-inline .reply-preview-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.reply-preview-inline .reply-preview-text {
+  font-size: 13px;
+  color: var(--tg-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+}
+
+.message.sent .reply-preview-inline .reply-preview-text {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.message-text-content {
+  word-wrap: break-word;
+  line-height: 1.5;
+}
+
+/* ============================================
+   REPLY BAR
+   ============================================ */
+.reply-bar {
+  background: var(--tg-white);
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--tg-border);
+  border-bottom: 1px solid var(--tg-border);
+  font-size: 13px;
+  color: var(--tg-text-secondary);
+  flex-shrink: 0;
+}
+
+.reply-bar .reply-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.reply-bar .reply-info .reply-label {
+  font-weight: 500;
+  color: var(--tg-primary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.reply-bar .reply-info .reply-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--tg-text);
+}
+
+.reply-bar .reply-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  transition: var(--tg-transition);
+  color: var(--tg-text-secondary);
+}
+
+.reply-bar .reply-close:hover {
+  background: var(--tg-bg);
+}
+
+/* ============================================
+   DELETED MESSAGE
+   ============================================ */
+.deleted-message {
+  opacity: 0.6;
+  font-style: italic;
+  font-size: 14px;
+}
+
+.message.deleted .bubble {
+  opacity: 0.7;
+}
+
+.message.deleted .message-actions {
+  display: none !important;
+}
+
+/* ============================================
+   REACTIONS DISPLAY
+   ============================================ */
+.reactions-display {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.reactions-display .reaction {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--tg-border);
+  border-radius: 16px;
+  padding: 1px 8px;
+  font-size: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  cursor: default;
+}
+
+.message.sent .reactions-display .reaction {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================
+   MEDIA MESSAGES
+   ============================================ */
+.media-message {
+  margin: 2px 0;
+}
+
+.image-message img {
+  max-width: 280px;
+  max-height: 300px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: var(--tg-transition);
+  display: block;
+  object-fit: cover;
+}
+
+.image-message img:hover {
+  opacity: 0.9;
+  transform: scale(1.01);
+}
+
+.audio-message {
+  min-width: 220px;
+}
+
+.audio-message .audio-player {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.audio-message audio {
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  background: transparent;
+  outline: none;
+}
+
+.audio-message audio::-webkit-media-controls-panel {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.message.sent .audio-message audio::-webkit-media-controls-panel {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.audio-message .audio-name {
+  font-size: 12px;
+  color: var(--tg-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.message.sent .audio-message .audio-name {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.video-message video {
+  max-width: 280px;
+  max-height: 300px;
+  border-radius: 12px;
+  display: block;
+}
+
+.video-message .video-name {
+  font-size: 12px;
+  color: var(--tg-text-secondary);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.message.sent .video-message .video-name {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.file-message .file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--tg-bg);
+  border-radius: 12px;
+  min-width: 200px;
+  transition: var(--tg-transition);
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--tg-border);
+}
+
+.message.sent .file-message .file-card {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.file-message .file-card:hover {
+  background: var(--tg-bg-dark);
+}
+
+.message.sent .file-message .file-card:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.file-message .file-icon {
+  font-size: 28px;
+}
+
+.file-message .file-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.message.sent .file-message .file-name {
+  color: white;
+}
+
+.file-message .file-download {
+  font-size: 18px;
+  opacity: 0.6;
+}
+
+.file-message a {
+  text-decoration: none;
+  color: inherit;
+}
+
+@media (max-width: 480px) {
+  .image-message img,
+  .video-message video {
+    max-width: 200px;
+    max-height: 200px;
+  }
+  
+  .audio-message {
+    min-width: 160px;
+  }
+  
+  .audio-message audio {
+    width: 160px;
+  }
+  
+  .file-message .file-card {
+    min-width: 150px;
+    padding: 8px 12px;
+  }
+  
+  .file-message .file-name {
+    max-width: 100px;
+  }
+}

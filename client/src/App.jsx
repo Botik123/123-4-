@@ -29,6 +29,8 @@ function App() {
   const [showReactions, setShowReactions] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -41,6 +43,22 @@ function App() {
   const API_URL = 'http://localhost:3001';
   const WS_URL = 'ws://localhost:3001';
 
+  // Набор эмодзи
+  const emojiList = ['😊', '😂', '❤️', '🔥', '👍', '👏', '🎉', '✨', '💪', '🤔', '😅', '🥰', '😍', '🤩', '😎', '🙏', '💀', '👀', '🤝', '💯'];
+
+  // Переключение темы
+  const toggleTheme = () => {
+    setIsDarkTheme(!isDarkTheme);
+    document.documentElement.setAttribute('data-theme', !isDarkTheme ? 'dark' : 'light');
+  };
+
+  // Вставка эмодзи
+  const insertEmoji = (emoji) => {
+    setInputText(prev => prev + emoji);
+    setShowEmojiPicker(false);
+    inputRef.current?.focus();
+  };
+
   // Функция для экранирования HTML (XSS защита)
   const escapeHtml = (text) => {
     if (!text) return '';
@@ -49,58 +67,19 @@ function App() {
     return div.innerHTML;
   };
 
-  // Функция для получения краткого описания файла для ответа
-  const getFilePreview = (text) => {
-    if (!text) return null;
-    
-    // Изображение
-    const imageMatch = text.match(/📷 Изображение:/);
-    if (imageMatch) {
-      return '📷 Изображение';
-    }
-    
-    // Аудио
-    const audioMatch = text.match(/🎵 Аудио: ([^\s]+)/);
-    if (audioMatch) {
-      return `🎵 ${audioMatch[1].substring(0, 20)}...`;
-    }
-    
-    // Видео
-    const videoMatch = text.match(/🎬 Видео: ([^\s]+)/);
-    if (videoMatch) {
-      return `🎬 ${videoMatch[1].substring(0, 20)}...`;
-    }
-    
-    // Файл
-    const fileMatch = text.match(/📎 Файл: ([^\s]+)/);
-    if (fileMatch) {
-      return `📎 ${fileMatch[1].substring(0, 20)}...`;
-    }
-    
-    // Удалённое сообщение
-    if (text === '🗑️ Сообщение удалено') {
-      return '🗑️ Сообщение удалено';
-    }
-    
-    return null;
-  };
-
   // Парсинг файлового сообщения
   const parseFileMessage = (text) => {
     if (!text) return null;
     
-    // Проверка на удалённое сообщение
     if (text === '🗑️ Сообщение удалено') {
       return { type: 'deleted' };
     }
     
-    // Изображение
     const imageMatch = text.match(/📷 Изображение: (http:\/\/localhost:3001\/uploads\/[^\s]+)/);
     if (imageMatch) {
       return { type: 'image', url: imageMatch[1] };
     }
     
-    // Аудио
     const audioMatch = text.match(/🎵 Аудио: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
     if (audioMatch) {
       const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
@@ -110,7 +89,6 @@ function App() {
       return { type: 'audio', name: audioMatch[1].trim(), url: null };
     }
     
-    // Видео
     const videoMatch = text.match(/🎬 Видео: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
     if (videoMatch) {
       const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
@@ -120,7 +98,6 @@ function App() {
       return { type: 'video', name: videoMatch[1].trim(), url: null };
     }
     
-    // Файл
     const fileMatch = text.match(/📎 Файл: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
     if (fileMatch) {
       const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
@@ -214,7 +191,7 @@ function App() {
     return text;
   };
 
-  // Функция для получения текста ответа из сообщения (с поддержкой файлов)
+  // Функция для получения текста ответа из сообщения
   const getReplyPreview = (text) => {
     if (!text) return null;
     const replyMatch = text.match(/^↩️ Ответ: "([^"]*)"\n/);
@@ -228,34 +205,26 @@ function App() {
   const getMessagePreview = (msg) => {
     if (!msg) return '';
     
-    // Если сообщение удалено
     if (msg.deleted || msg.text === '🗑️ Сообщение удалено') {
       return '🗑️ Сообщение удалено';
     }
     
-    // Проверяем, является ли сообщение файлом
     const fileData = parseFileMessage(msg.text);
     if (fileData) {
       switch (fileData.type) {
-        case 'image':
-          return '📷 Изображение';
-        case 'audio':
-          return `🎵 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Аудио'}`;
-        case 'video':
-          return `🎬 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Видео'}`;
-        case 'file':
-          return `📎 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Файл'}`;
-        default:
-          return '📎 Файл';
+        case 'image': return '📷 Изображение';
+        case 'audio': return `🎵 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Аудио'}`;
+        case 'video': return `🎬 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Видео'}`;
+        case 'file': return `📎 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Файл'}`;
+        default: return '📎 Файл';
       }
     }
     
-    // Обычное текстовое сообщение
     const cleanText = getCleanText(msg.text);
     return cleanText.length > 50 ? cleanText.substring(0, 50) + '...' : cleanText;
   };
 
-  // Рендер содержимого сообщения (с поддержкой ответов)
+  // Рендер содержимого сообщения
   const renderMessageContent = (msg, isOwn) => {
     const isDeleted = msg.deleted || msg.text === '🗑️ Сообщение удалено';
     if (isDeleted) {
@@ -409,6 +378,20 @@ function App() {
                 setMessages(prev => [...prev, newMsg]);
                 socket.send(JSON.stringify({ type: 'read', from: data.from, to: user.id }));
               }
+              
+              // Браузерное уведомление
+              if (selectedUser?.id !== data.from) {
+                if (Notification.permission === 'default') {
+                  Notification.requestPermission();
+                }
+                if (Notification.permission === 'granted') {
+                  const sender = users.find(u => u.id === data.from);
+                  new Notification('💬 Новое сообщение', {
+                    body: `${sender?.username || 'Пользователь'}: ${data.text.substring(0, 50)}${data.text.length > 50 ? '...' : ''}`,
+                    icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💬</text></svg>'
+                  });
+                }
+              }
               break;
 
             case 'message_edited':
@@ -441,9 +424,12 @@ function App() {
               break;
 
             case 'message_read':
-              setMessages(prev => prev.map(msg =>
-                msg.from_user === user.id && msg.to_user === data.from ? { ...msg, read: 1 } : msg
-              ));
+              setMessages(prev => prev.map(msg => {
+                if (msg.from_user === user.id && msg.to_user === data.from) {
+                  return { ...msg, read: 1 };
+                }
+                return msg;
+              }));
               break;
 
             case 'typing':
@@ -472,9 +458,19 @@ function App() {
         }
       };
 
-      socket.onclose = () => {
-        console.log('WebSocket disconnected');
+      socket.onclose = (event) => {
+        console.log('WebSocket disconnected', event.code, event.reason);
         setIsConnecting(false);
+        
+        // Автоматическое переподключение через 3 секунды (если не было ошибки авторизации)
+        if (event.code !== 1000 && event.code !== 1001) {
+          setTimeout(() => {
+            if (user) {
+              console.log('Attempting to reconnect...');
+              setWs(null);
+            }
+          }, 3000);
+        }
       };
 
       socket.onerror = (error) => {
@@ -484,11 +480,37 @@ function App() {
 
       setWs(socket);
       return () => {
-        socket.close();
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+          socket.close(1000, 'Component unmount');
+        }
         setWs(null);
       };
     }
   }, [user, selectedUser]);
+
+  // Автоматическое переподключение
+  useEffect(() => {
+    if (!ws && user && !isConnecting) {
+      const reconnectTimer = setTimeout(() => {
+        console.log('Reconnecting...');
+        setIsConnecting(true);
+        const socket = new WebSocket(WS_URL);
+        
+        socket.onopen = () => {
+          console.log('Reconnected successfully');
+          setIsConnecting(false);
+          socket.send(JSON.stringify({ type: 'auth', userId: user.id }));
+          setWs(socket);
+        };
+        
+        socket.onerror = () => {
+          setIsConnecting(false);
+        };
+      }, 3000);
+      
+      return () => clearTimeout(reconnectTimer);
+    }
+  }, [ws, user, isConnecting]);
 
   // Загрузка пользователей
   useEffect(() => {
@@ -536,7 +558,6 @@ function App() {
     const tempId = Date.now();
     let textToSend = trimmedText;
 
-    // Если есть ответ, добавляем префикс с красивым превью
     if (replyTo) {
       const preview = getMessagePreview(replyTo);
       textToSend = `↩️ Ответ: "${preview}"\n${trimmedText}`;
@@ -786,6 +807,9 @@ function App() {
             </div>
           </div>
           <div className="profile-actions">
+            <button onClick={toggleTheme} title="Тёмная тема">
+              {isDarkTheme ? '☀️' : '🌙'}
+            </button>
             <button title="Настройки">⚙️</button>
           </div>
         </div>
@@ -971,12 +995,32 @@ function App() {
                   placeholder="Введите сообщение..."
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                    if (e.key === 'Enter' && e.ctrlKey) {
+                      e.preventDefault();
+                      setInputText(prev => prev + '\n');
+                    }
+                  }}
                   onKeyUp={handleTyping}
                   disabled={isConnecting}
                 />
-                <button className="emoji-btn" title="Эмодзи">😊</button>
+                <button className="emoji-btn" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
+                  😊
+                </button>
               </div>
+              {showEmojiPicker && (
+                <div className="emoji-picker">
+                  {emojiList.map(emoji => (
+                    <button key={emoji} onClick={() => insertEmoji(emoji)}>
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
               <label className="file-btn" title="Прикрепить файл">
                 📎
                 <input
