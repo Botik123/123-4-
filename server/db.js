@@ -16,7 +16,7 @@ db.serialize(() => {
     )
   `);
 
-  // Таблица сообщений
+  // Таблица сообщений (полная версия)
   db.run(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -33,10 +33,6 @@ db.serialize(() => {
     )
   `);
 
-  // Индексы для оптимизации поиска сообщений (чтобы чаты не тормозили)
-  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_from_to ON messages(from_user, to_user)`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)`);
-
   // Таблица реакций
   db.run(`
     CREATE TABLE IF NOT EXISTS message_reactions (
@@ -51,7 +47,7 @@ db.serialize(() => {
     )
   `);
 
-  console.log('✅ База данных готова и оптимизирована');
+  console.log('✅ База данных готова');
 });
 
 module.exports = db;

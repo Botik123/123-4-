@@ -11,32 +11,49 @@ function App() {
   const [typing, setTyping] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
   const [showReactions, setShowReactions] = useState(null);
-  const [typingUser, setTypingUser] = useState(null);
-  
+  const [isConnecting, setIsConnecting] = useState(false);
+
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-  
+
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
-  
+
   const API_URL = 'http://localhost:3001';
   const WS_URL = 'ws://localhost:3001';
-  
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 50);
+
+  // Функция для экранирования HTML (XSS защита)
+  const escapeHtml = (text) => {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   };
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-  
+
   // Регистрация
   const handleRegister = async () => {
+    // Валидация на клиенте
+    if (loginUsername.length < 3 || loginUsername.length > 20) {
+      alert('Имя пользователя должно быть от 3 до 20 символов');
+      return;
+    }
+
+    if (!/^[a-zA-Zа-яА-Я0-9_]+$/.test(loginUsername)) {
+      alert('Имя пользователя содержит недопустимые символы');
+      return;
+    }
+
+    if (loginPassword.length < 4) {
+      alert('Пароль должен быть минимум 4 символа');
+      return;
+    }
+
     try {
       const response = await fetch(`${API_URL}/register`, {
         method: 'POST',
@@ -44,18 +61,21 @@ function App() {
         body: JSON.stringify({ username: loginUsername, password: loginPassword })
       });
       const data = await response.json();
-      if (data.error) {
-        alert(data.error);
-      } else {
-        alert('Успешная регистрация! Теперь войдите.');
+      if (response.ok) {
+        alert('Регистрация успешна! Теперь войдите.');
         setIsLogin(true);
+        setLoginUsername('');
+        setLoginPassword('');
+      } else {
+        alert(data.error || 'Ошибка регистрации');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error('Register error:', error);
+      alert('Ошибка подключения к серверу');
     }
   };
 
-  // Логин
+  // Вход
   const handleLogin = async () => {
     try {
       const response = await fetch(`${API_URL}/login`, {
@@ -64,242 +84,354 @@ function App() {
         body: JSON.stringify({ username: loginUsername, password: loginPassword })
       });
       const data = await response.json();
-      if (data.error) {
-        alert(data.error);
-      } else {
+      if (response.ok) {
         setUser(data);
-        localStorage.setItem('chat_user', JSON.stringify(data));
+      } else {
+        alert(data.error || 'Ошибка входа');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Ошибка подключения к серверу');
     }
   };
 
-  // Выход из аккаунта
-  const handleLogout = () => {
-    if (ws) ws.close();
-    setUser(null);
-    setSelectedUser(null);
-    setMessages([]);
-    localStorage.removeItem('chat_user');
-  };
-
-  // Авторизация по сохраненной сессии
+  // WebSocket подключение
   useEffect(() => {
-    const saved = localStorage.getItem('chat_user');
-    if (saved) {
-      setUser(JSON.parse(saved));
+    if (user) {
+      setIsConnecting(true);
+      const socket = new WebSocket(WS_URL);
+
+      socket.onopen = () => {
+        console.log('WebSocket connected');
+        setIsConnecting(false);
+        socket.send(JSON.stringify({ type: 'auth', userId: user.id }));
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          switch (data.type) {
+            case 'message':
+              if (selectedUser && data.from === selectedUser.id) {
+                setMessages(prev => [...prev, {
+                  id: data.id,
+                  from_user: data.from,
+                  to_user: data.to,
+                  text: data.text,
+                  timestamp: data.timestamp,
+                  read: data.read,
+                  reply_to: data.reply_to,
+                  forwarded_from: data.forwarded_from
+                }]);
+                socket.send(JSON.stringify({ type: 'read', from: data.from, to: user.id }));
+              }
+              break;
+
+            case 'message_edited':
+              setMessages(prev => prev.map(msg =>
+                msg.id === data.messageId ? { ...msg, text: data.text, edited: true } : msg
+              ));
+              break;
+
+            case 'message_deleted':
+              setMessages(prev => prev.map(msg =>
+                msg.id === data.messageId ? { ...msg, text: '🗑️ Сообщение удалено', deleted: true } : msg
+              ));
+              break;
+
+            case 'reaction':
+              setMessages(prev => prev.map(msg => {
+                if (msg.id === data.messageId) {
+                  const reactions = msg.reactions || {};
+                  reactions[data.userId] = data.reaction;
+                  return { ...msg, reactions };
+                }
+                return msg;
+              }));
+              break;
+
+            case 'message_sent':
+              setMessages(prev => prev.map(msg =>
+                msg.id === null ? { ...msg, id: data.id, timestamp: data.timestamp } : msg
+              ));
+              break;
+
+            case 'message_read':
+              setMessages(prev => prev.map(msg =>
+                msg.from_user === user.id && msg.to_user === data.from ? { ...msg, read: 1 } : msg
+              ));
+              break;
+
+            case 'typing':
+              if (selectedUser && data.from === selectedUser.id) {
+                setTyping(true);
+                setTimeout(() => setTyping(false), 2000);
+              }
+              break;
+
+            case 'status':
+              setUsers(prev => prev.map(u =>
+                u.id === data.userId ? { ...u, online: data.online, last_seen: data.last_seen } : u
+              ));
+              break;
+
+            case 'error':
+              console.error('Server error:', data.message);
+              alert(`Ошибка: ${data.message}`);
+              break;
+
+            default:
+              break;
+          }
+        } catch (error) {
+          console.error('Error parsing message:', error);
+        }
+      };
+
+      socket.onclose = () => {
+        console.log('WebSocket disconnected');
+        setIsConnecting(false);
+      };
+
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        setIsConnecting(false);
+      };
+
+      setWs(socket);
+      return () => {
+        socket.close();
+        setWs(null);
+      };
     }
-  }, []);
-
-  // Загрузка списка пользователей
-  useEffect(() => {
-    if (!user) return;
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch(`${API_URL}/users/${user.id}`);
-        const data = await res.json();
-        setUsers(data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchUsers();
-    const interval = setInterval(fetchUsers, 5000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  // Загрузка истории сообщений
-  useEffect(() => {
-    if (!user || !selectedUser) return;
-    const fetchMessages = async () => {
-      try {
-        const res = await fetch(`${API_URL}/messages/${user.id}/${selectedUser.id}`);
-        const data = await res.json();
-        setMessages(data);
-        scrollToBottom();
-      } catch (err) {
-        console.error(err);
-      }
-    };
-    fetchMessages();
-  }, [selectedUser, user]);
-
-  // Инициализация WebSocket со всеми типами событий бэкенда
-  useEffect(() => {
-    if (!user) return;
-    const socket = new WebSocket(WS_URL);
-    
-    socket.onopen = () => {
-      socket.send(JSON.stringify({ type: 'auth', userId: user.id }));
-    };
-    
-    socket.onmessage = (event) => {
-      const parsed = JSON.parse(event.data);
-      
-      switch (parsed.type) {
-        case 'message':
-          // Проверяем, относится ли сообщение к текущему открытому чату
-          if (
-            (parsed.from === user.id && parsed.to === selectedUser?.id) ||
-            (parsed.from === selectedUser?.id && parsed.to === user.id)
-          ) {
-            setMessages(prev => {
-              // Исключаем дубли по id
-              if (prev.some(m => m.id === parsed.id)) return prev;
-              return [...prev, parsed];
-            });
-            // Отправляем статус "прочитано", если сообщение пришло от собеседника
-            if (parsed.from === selectedUser?.id) {
-              socket.send(JSON.stringify({ type: 'read', from: parsed.from, to: user.id }));
-            }
-          }
-          break;
-
-        case 'message_edited':
-          setMessages(prev => prev.map(m => 
-            m.id === parsed.messageId ? { ...m, text: parsed.text, edited: 1, edited_at: parsed.edited_at } : m
-          ));
-          break;
-
-        case 'message_deleted':
-          setMessages(prev => prev.map(m => 
-            m.id === parsed.messageId ? { ...m, text: "🗑️ Сообщение удалено", deleted: 1 } : m
-          ));
-          break;
-
-        case 'reaction':
-          // Так как структуры реакций могут расширяться, перезаписываем или обновляем в UI
-          setMessages(prev => prev.map(m => {
-            if (m.id === parsed.messageId) {
-              // Кастомное поле для быстрого отображения реакции в текущем сеансе
-              return { ...m, current_reaction: parsed.reaction };
-            }
-            return m;
-          }));
-          break;
-          
-        case 'message_read':
-          if (selectedUser && parsed.from === selectedUser.id) {
-            setMessages(prev => prev.map(m => m.from_user === user.id ? { ...m, read: 1 } : m));
-          }
-          break;
-          
-        case 'typing':
-          if (selectedUser && parsed.from === selectedUser.id) {
-            setTypingUser(parsed.from);
-            clearTimeout(typingTimeoutRef.current);
-            typingTimeoutRef.current = setTimeout(() => setTypingUser(null), 3000);
-          }
-          break;
-
-        case 'status':
-          setUsers(prev => prev.map(u => 
-            u.id === parsed.userId ? { ...u, online: parsed.online ? 1 : 0, last_seen: parsed.last_seen } : u
-          ));
-          break;
-          
-        default:
-          break;
-      }
-    };
-    
-    setWs(socket);
-    return () => socket.close();
   }, [user, selectedUser]);
 
-  // Отправка текстового сообщения
+  // Загрузка пользователей
+  useEffect(() => {
+    if (user) {
+      fetch(`${API_URL}/users/${user.id}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Network response was not ok');
+          return res.json();
+        })
+        .then(data => setUsers(data))
+        .catch(err => {
+          console.error('Error loading users:', err);
+          setUsers([]);
+        });
+    }
+  }, [user]);
+
+  // Загрузка сообщений
+  useEffect(() => {
+    if (user && selectedUser) {
+      fetch(`${API_URL}/messages/${user.id}/${selectedUser.id}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Network response was not ok');
+          return res.json();
+        })
+        .then(data => setMessages(data))
+        .catch(err => {
+          console.error('Error loading messages:', err);
+          setMessages([]);
+        });
+    }
+  }, [user, selectedUser]);
+
+  // Отправка сообщения
   const sendMessage = () => {
-    if (!inputText.trim() || !ws || !selectedUser) return;
-    
-    const payload = {
+    const trimmedText = inputText.trim();
+    if (!trimmedText || !selectedUser || !ws || isConnecting) return;
+
+    const tempId = Date.now();
+    let textToSend = trimmedText;
+
+    if (replyTo) {
+      textToSend = `↩️ Ответ: "${replyTo.text.substring(0, 50)}"\n${trimmedText}`;
+    }
+
+    setMessages(prev => [...prev, {
+      id: tempId,
+      from_user: user.id,
+      to_user: selectedUser.id,
+      text: textToSend,
+      timestamp: Date.now(),
+      read: 0,
+      reply_to: replyTo?.id
+    }]);
+
+    ws.send(JSON.stringify({
       type: 'message',
+      id: tempId,
       from: user.id,
       to: selectedUser.id,
-      text: inputText,
-      reply_to: replyTo ? replyTo.id : null
-    };
-    
-    ws.send(JSON.stringify(payload));
+      text: textToSend,
+      reply_to: replyTo?.id
+    }));
+
     setInputText('');
     setReplyTo(null);
   };
 
-  // Отправка файлов через REST-эндпоинт /upload
-  const sendFile = async (e) => {
-    const file = e.target.files[0];
-    if (!file || !selectedUser) return;
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    try {
-      const res = await fetch(`${API_URL}/upload`, {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-      
-      if (data.url && ws) {
-        // Формируем сообщение, где текстом будет ссылка или метаданные
-        const payload = {
-          type: 'message',
-          from: user.id,
-          to: selectedUser.id,
-          text: data.url, 
-          file_type: data.type,
-          thumbnail: data.thumbnail
-        };
-        ws.send(JSON.stringify(payload));
-      }
-    } catch (err) {
-      console.error('Ошибка отправки файла:', err);
+  // ✏️ Редактирование
+  const handleEdit = (message) => {
+    const newText = prompt('Редактировать сообщение:', message.text);
+    if (newText && newText.trim() && ws) {
+      ws.send(JSON.stringify({
+        type: 'edit_message',
+        messageId: message.id,
+        to: selectedUser.id,
+        text: newText.trim()
+      }));
     }
   };
 
-  // Отправка статуса набора текста
-  const handleTyping = () => {
-    if (!ws || !selectedUser || typing) return;
-    setTyping(true);
-    ws.send(JSON.stringify({ type: 'typing', from: user.id, to: selectedUser.id }));
-    setTimeout(() => setTyping(false), 2000);
+  // 🗑️ Удаление
+  const handleDelete = (messageId) => {
+    if (window.confirm('Удалить сообщение?')) {
+      ws.send(JSON.stringify({
+        type: 'delete_message',
+        messageId: messageId,
+        to: selectedUser.id
+      }));
+    }
   };
 
-  // Отправка реакции
-  const sendReaction = (messageId, reaction) => {
+  // 😊 Реакция
+  const addReaction = (messageId, reaction) => {
     if (!ws || !selectedUser) return;
+
     ws.send(JSON.stringify({
       type: 'reaction',
-      messageId,
+      messageId: messageId,
       userId: user.id,
-      reaction,
-      to: selectedUser.id
+      to: selectedUser.id,
+      reaction: reaction
     }));
+
     setShowReactions(null);
   };
 
+  // 📎 Пересылка
+  const forwardMessage = (message) => {
+    if (!ws || !selectedUser) return;
+
+    const forwardText = `📎 Переслано: ${message.text}`;
+
+    ws.send(JSON.stringify({
+      type: 'message',
+      from: user.id,
+      to: selectedUser.id,
+      text: forwardText,
+      forwarded_from: message.from_user
+    }));
+  };
+
+  // 📁 Отправка файла с валидацией
+  const sendFile = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !selectedUser || !ws || isConnecting) return;
+
+    // Проверка размера файла (50 MB)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`Файл слишком большой! Максимальный размер: 50 MB. Ваш файл: ${(file.size / 1024 / 1024).toFixed(1)} MB`);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // Проверка типа файла
+    const allowedTypes = ['image/', 'video/', 'audio/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+    const isAllowed = allowedTypes.some(type => file.type.startsWith(type) || file.type === type);
+
+    if (!isAllowed) {
+      alert('Неподдерживаемый тип файла! Разрешены: изображения, видео, аудио, PDF, Word, TXT');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(`${API_URL}/upload`, { method: 'POST', body: formData });
+      if (!response.ok) throw new Error('Upload failed');
+
+      const fileData = await response.json();
+
+      let fileText = '';
+      if (fileData.type === 'image') {
+        fileText = `📷 Изображение: ${API_URL}${fileData.url}`;
+      } else if (fileData.type === 'audio') {
+        fileText = `🎵 Аудио: ${fileData.name}`;
+      } else if (fileData.type === 'video') {
+        fileText = `🎬 Видео: ${fileData.name}`;
+      } else {
+        fileText = `📎 Файл: ${fileData.name}`;
+      }
+
+      ws.send(JSON.stringify({
+        type: 'message',
+        from: user.id,
+        to: selectedUser.id,
+        text: fileText
+      }));
+
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        from_user: user.id,
+        to_user: selectedUser.id,
+        text: fileText,
+        timestamp: Date.now(),
+        read: 0
+      }]);
+
+    } catch (error) {
+      console.error('File upload error:', error);
+      alert('Ошибка загрузки файла');
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleTyping = () => {
+    if (ws && selectedUser && !isConnecting) {
+      ws.send(JSON.stringify({ type: 'typing', from: user.id, to: selectedUser.id }));
+    }
+  };
+
+  const reactionsList = ['👍', '❤️', '😂', '😮', '😢', '😡'];
+
+  // Форма входа
   if (!user) {
     return (
       <div className="auth-container">
         <div className="auth-box">
-          <h2>{isLogin ? 'Вход в мессенджер' : 'Регистрация'}</h2>
+          <h2>{isLogin ? 'Вход' : 'Регистрация'}</h2>
           <input
             type="text"
             placeholder="Имя пользователя"
             value={loginUsername}
             onChange={(e) => setLoginUsername(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && (isLogin ? handleLogin() : handleRegister())}
           />
           <input
             type="password"
             placeholder="Пароль"
             value={loginPassword}
             onChange={(e) => setLoginPassword(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && (isLogin ? handleLogin() : handleRegister())}
           />
-          {isLogin ? (
-            <button onClick={handleLogin}>Войти</button>
-          ) : (
-            <button onClick={handleRegister}>Создать аккаунт</button>
-          )}
+          <button onClick={isLogin ? handleLogin : handleRegister}>
+            {isLogin ? 'Войти' : 'Зарегистрироваться'}
+          </button>
           <p onClick={() => setIsLogin(!isLogin)}>
             {isLogin ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войдите'}
           </p>
@@ -308,124 +440,102 @@ function App() {
     );
   }
 
+  // Основной интерфейс
   return (
-    <div className="messenger-container">
-      {/* Боковая панель */}
+    <div className="messenger">
       <div className="sidebar">
-        <div className="profile-header">
-          <div className="user-info">
-            <div className="avatar">👤</div>
-            <h3>{user.username}</h3>
-          </div>
-          <button className="logout-btn" onClick={handleLogout}>Выйти</button>
+        <div className="user-info">
+          <div className="avatar">{user.username?.[0]?.toUpperCase() || 'U'}</div>
+          <div className="username">{user.username}</div>
+          {isConnecting && <span className="status-connecting">⏳</span>}
         </div>
         <div className="users-list">
-          {users.map((u) => (
+          <h3>Контакты</h3>
+          {users.map(u => (
             <div
               key={u.id}
               className={`user-item ${selectedUser?.id === u.id ? 'active' : ''}`}
               onClick={() => setSelectedUser(u)}
             >
-              <div className="avatar">👤</div>
+              <div className="avatar small">{u.username?.[0]?.toUpperCase() || 'U'}</div>
               <div className="user-details">
-                <span className="username">{u.username}</span>
-                <span className={`status ${u.online ? 'online' : 'offline'}`}>
-                  {u.online ? 'онлайн' : 'офлайн'}
-                </span>
+                <div className="username">{u.username}</div>
+                <div className="status">{u.online ? '🟢 Онлайн' : '⚫ Оффлайн'}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Окно чата */}
-      <div className="chat-window">
+      <div className="chat-area">
         {selectedUser ? (
           <>
             <div className="chat-header">
-              <h3>{selectedUser.username}</h3>
-              {typingUser === selectedUser.id && (
-                <span className="typing-indicator">печатает...</span>
-              )}
+              <div className="avatar">{selectedUser.username?.[0]?.toUpperCase() || 'U'}</div>
+              <div>
+                <div className="username">{selectedUser.username}</div>
+                <div className="status">
+                  {typing ? '✍️ Печатает...' : (selectedUser.online ? '🟢 Онлайн' : 'Не в сети')}
+                </div>
+              </div>
             </div>
-            
-            <div className="messages-area">
-              {messages.map((msg) => {
-                const isMyMessage = msg.from_user === user.id || msg.from === user.id;
-                const textContent = msg.text || '';
-                const isFile = textContent.startsWith('/uploads/');
-                
-                return (
-                  <div key={msg.id} className={`message-wrapper ${isMyMessage ? 'outgoing' : 'incoming'}`}>
-                    <div className="message-box">
-                      {msg.reply_to && (
-                        <div className="reply-preview">
-                          <small>Ответ на сообщение</small>
-                        </div>
-                      )}
-                      
-                      <div className="message-text">
-                        {isFile ? (
-                          textContent.match(/\.(jpeg|jpg|gif|png)$/i) ? (
-                            <img 
-                              src={`${API_URL}${msg.thumbnail || textContent}`} 
-                              alt="Uploaded content" 
-                              className="chat-image" 
-                            />
-                          ) : (
-                            <a href={`${API_URL}${textContent}`} target="_blank" rel="noreferrer" className="file-link">
-                              📎 Скачать файл
-                            </a>
-                          )
-                        ) : (
-                          textContent
-                        )}
-                      </div>
-                      
-                      {/* Блок отображения реакций */}
-                      {(msg.current_reaction || msg.reaction) && (
-                        <div className="message-reaction-badge">
-                          {msg.current_reaction || msg.reaction}
-                        </div>
-                      )}
 
-                      <div className="message-meta">
-                        <span className="message-time">
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        
-                        {isMyMessage && (
-                          <span className="read-status">{msg.read ? '✓✓' : '✓'}</span>
-                        )}
+            <div className="messages-container">
+              {messages.map(msg => (
+                <div
+                  key={msg.id}
+                  className={`message ${msg.from_user === user.id ? 'sent' : 'received'} ${msg.deleted ? 'deleted' : ''}`}
+                >
+                  <div className="message-actions">
+                    <button onClick={() => setReplyTo(msg)} title="Ответить">↩️</button>
+                    <button onClick={() => forwardMessage(msg)} title="Переслать">📎</button>
+                    {msg.from_user === user.id && (
+                      <button onClick={() => handleEdit(msg)} title="Редактировать">✏️</button>
+                    )}
+                    <button onClick={() => setShowReactions(showReactions === msg.id ? null : msg.id)} title="Реакции">😊</button>
+                    {msg.from_user === user.id && (
+                      <button onClick={() => handleDelete(msg.id)} title="Удалить">🗑️</button>
+                    )}
+                  </div>
+
+                  {showReactions === msg.id && (
+                    <div className="reactions-picker">
+                      {reactionsList.map(r => (
+                        <button key={r} onClick={() => addReaction(msg.id, r)}>{r}</button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="message-content">
+                    {msg.reply_to && (
+                      <div className="reply-preview">
+                        <div className="reply-indicator">↩️ Ответ</div>
                       </div>
-                      
-                      {/* Кнопка вызова панели реакций и ответа */}
-                      <div className="message-actions-trigger">
-                        <button onClick={() => setReplyTo(msg)}>↩️</button>
-                        <button onClick={() => setShowReactions(showReactions === msg.id ? null : msg.id)}>😀</button>
-                        
-                        {showReactions === msg.id && (
-                          <div className="reactions-picker">
-                            {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
-                              <button key={emoji} onClick={() => sendReaction(msg.id, emoji)}>{emoji}</button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                    )}
+                    {msg.forwarded_from && (
+                      <div className="forward-indicator">📎 Переслано</div>
+                    )}
+                    <div className="message-text" dangerouslySetInnerHTML={{ __html: escapeHtml(msg.text) }} />
+                    {msg.edited && <span className="edited-indicator"> (ред.)</span>}
+                    <div className="message-time">
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                      {msg.from_user === user.id && (
+                        <span className="read-status">{msg.read ? '✓✓' : '✓'}</span>
+                      )}
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
               <div ref={messagesEndRef} />
             </div>
-            
+
             {replyTo && (
               <div className="reply-bar">
-                <span>Ответ на: {replyTo.text?.substring(0, 50)}...</span>
+                <span>Ответ: {replyTo.text.substring(0, 50)}...</span>
                 <button onClick={() => setReplyTo(null)}>✖️</button>
               </div>
             )}
-            
+
             <div className="input-area">
               <input
                 ref={inputRef}
@@ -433,8 +543,9 @@ function App() {
                 placeholder="Введите сообщение..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 onKeyUp={handleTyping}
+                disabled={isConnecting}
               />
               <label className="file-button">
                 📎
@@ -443,13 +554,16 @@ function App() {
                   ref={fileInputRef}
                   onChange={sendFile}
                   style={{ display: 'none' }}
+                  disabled={isConnecting}
                 />
               </label>
-              <button onClick={sendMessage}>📤</button>
+              <button onClick={sendMessage} disabled={isConnecting}>
+                {isConnecting ? '⏳' : '📤'}
+              </button>
             </div>
           </>
         ) : (
-          <div className="no-chat">Выберите контакт из списка слева, чтобы начать общение</div>
+          <div className="no-chat">Выберите контакт</div>
         )}
       </div>
     </div>
