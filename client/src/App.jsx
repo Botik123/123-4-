@@ -1,6 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
+// Цвета для аватаров
+const avatarColors = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+  '#DDA0DD', '#FF8A5C', '#A29BFE', '#FD79A8', '#00CEC9',
+  '#FDCB6E', '#E17055', '#00B894', '#6C5CE7', '#FD79A8'
+];
+
+const getAvatarColor = (name) => {
+  if (!name) return '#667eea';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return avatarColors[Math.abs(hash) % avatarColors.length];
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [users, setUsers] = useState([]);
@@ -12,6 +28,7 @@ function App() {
   const [replyTo, setReplyTo] = useState(null);
   const [showReactions, setShowReactions] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -32,13 +49,277 @@ function App() {
     return div.innerHTML;
   };
 
+  // Функция для получения краткого описания файла для ответа
+  const getFilePreview = (text) => {
+    if (!text) return null;
+    
+    // Изображение
+    const imageMatch = text.match(/📷 Изображение:/);
+    if (imageMatch) {
+      return '📷 Изображение';
+    }
+    
+    // Аудио
+    const audioMatch = text.match(/🎵 Аудио: ([^\s]+)/);
+    if (audioMatch) {
+      return `🎵 ${audioMatch[1].substring(0, 20)}...`;
+    }
+    
+    // Видео
+    const videoMatch = text.match(/🎬 Видео: ([^\s]+)/);
+    if (videoMatch) {
+      return `🎬 ${videoMatch[1].substring(0, 20)}...`;
+    }
+    
+    // Файл
+    const fileMatch = text.match(/📎 Файл: ([^\s]+)/);
+    if (fileMatch) {
+      return `📎 ${fileMatch[1].substring(0, 20)}...`;
+    }
+    
+    // Удалённое сообщение
+    if (text === '🗑️ Сообщение удалено') {
+      return '🗑️ Сообщение удалено';
+    }
+    
+    return null;
+  };
+
+  // Парсинг файлового сообщения
+  const parseFileMessage = (text) => {
+    if (!text) return null;
+    
+    // Проверка на удалённое сообщение
+    if (text === '🗑️ Сообщение удалено') {
+      return { type: 'deleted' };
+    }
+    
+    // Изображение
+    const imageMatch = text.match(/📷 Изображение: (http:\/\/localhost:3001\/uploads\/[^\s]+)/);
+    if (imageMatch) {
+      return { type: 'image', url: imageMatch[1] };
+    }
+    
+    // Аудио
+    const audioMatch = text.match(/🎵 Аудио: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
+    if (audioMatch) {
+      const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
+      if (urlMatch) {
+        return { type: 'audio', name: audioMatch[1].trim(), url: urlMatch[0] };
+      }
+      return { type: 'audio', name: audioMatch[1].trim(), url: null };
+    }
+    
+    // Видео
+    const videoMatch = text.match(/🎬 Видео: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
+    if (videoMatch) {
+      const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
+      if (urlMatch) {
+        return { type: 'video', name: videoMatch[1].trim(), url: urlMatch[0] };
+      }
+      return { type: 'video', name: videoMatch[1].trim(), url: null };
+    }
+    
+    // Файл
+    const fileMatch = text.match(/📎 Файл: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
+    if (fileMatch) {
+      const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
+      if (urlMatch) {
+        return { type: 'file', name: fileMatch[1].trim(), url: urlMatch[0] };
+      }
+      return { type: 'file', name: fileMatch[1].trim(), url: null };
+    }
+    
+    return null;
+  };
+
+  // Рендер файлового сообщения
+  const renderFileMessage = (fileData, isOwn) => {
+    if (!fileData) return null;
+
+    switch (fileData.type) {
+      case 'deleted':
+        return <span className="deleted-message">🗑️ Сообщение удалено</span>;
+
+      case 'image':
+        return (
+          <div className="media-message image-message">
+            <img 
+              src={fileData.url} 
+              alt="Изображение"
+              onClick={() => window.open(fileData.url, '_blank')}
+              loading="lazy"
+            />
+          </div>
+        );
+
+      case 'audio':
+        if (fileData.url) {
+          return (
+            <div className="media-message audio-message">
+              <div className="audio-player">
+                <audio controls>
+                  <source src={fileData.url} type="audio/mpeg" />
+                  Ваш браузер не поддерживает аудио
+                </audio>
+                <div className="audio-name">{fileData.name}</div>
+              </div>
+            </div>
+          );
+        }
+        return <div className="media-message file-message">🎵 {fileData.name}</div>;
+
+      case 'video':
+        if (fileData.url) {
+          return (
+            <div className="media-message video-message">
+              <video controls>
+                <source src={fileData.url} type="video/mp4" />
+                Ваш браузер не поддерживает видео
+              </video>
+              <div className="video-name">{fileData.name}</div>
+            </div>
+          );
+        }
+        return <div className="media-message file-message">🎬 {fileData.name}</div>;
+
+      case 'file':
+        if (fileData.url) {
+          return (
+            <div className="media-message file-message">
+              <a href={fileData.url} download target="_blank" rel="noopener noreferrer">
+                <div className="file-card">
+                  <span className="file-icon">📄</span>
+                  <span className="file-name">{fileData.name}</span>
+                  <span className="file-download">⬇️</span>
+                </div>
+              </a>
+            </div>
+          );
+        }
+        return <div className="media-message file-message">📎 {fileData.name}</div>;
+
+      default:
+        return null;
+    }
+  };
+
+  // Функция для получения текста сообщения без префикса ответа
+  const getCleanText = (text) => {
+    if (!text) return '';
+    const replyMatch = text.match(/^↩️ Ответ: "[^"]*"\n/);
+    if (replyMatch) {
+      return text.substring(replyMatch[0].length);
+    }
+    return text;
+  };
+
+  // Функция для получения текста ответа из сообщения (с поддержкой файлов)
+  const getReplyPreview = (text) => {
+    if (!text) return null;
+    const replyMatch = text.match(/^↩️ Ответ: "([^"]*)"\n/);
+    if (replyMatch) {
+      return replyMatch[1];
+    }
+    return null;
+  };
+
+  // Функция для получения красивого превью сообщения для ответа
+  const getMessagePreview = (msg) => {
+    if (!msg) return '';
+    
+    // Если сообщение удалено
+    if (msg.deleted || msg.text === '🗑️ Сообщение удалено') {
+      return '🗑️ Сообщение удалено';
+    }
+    
+    // Проверяем, является ли сообщение файлом
+    const fileData = parseFileMessage(msg.text);
+    if (fileData) {
+      switch (fileData.type) {
+        case 'image':
+          return '📷 Изображение';
+        case 'audio':
+          return `🎵 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Аудио'}`;
+        case 'video':
+          return `🎬 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Видео'}`;
+        case 'file':
+          return `📎 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Файл'}`;
+        default:
+          return '📎 Файл';
+      }
+    }
+    
+    // Обычное текстовое сообщение
+    const cleanText = getCleanText(msg.text);
+    return cleanText.length > 50 ? cleanText.substring(0, 50) + '...' : cleanText;
+  };
+
+  // Рендер содержимого сообщения (с поддержкой ответов)
+  const renderMessageContent = (msg, isOwn) => {
+    const isDeleted = msg.deleted || msg.text === '🗑️ Сообщение удалено';
+    if (isDeleted) {
+      return <span className="deleted-message">🗑️ Сообщение удалено</span>;
+    }
+
+    const fileData = parseFileMessage(msg.text);
+    if (fileData && fileData.type !== 'deleted') {
+      return renderFileMessage(fileData, isOwn);
+    }
+
+    const replyPreview = getReplyPreview(msg.text);
+    const cleanText = getCleanText(msg.text);
+
+    return (
+      <>
+        {replyPreview && (
+          <div className="reply-preview-inline">
+            <div className="reply-preview-label">↩️ Ответ</div>
+            <div className="reply-preview-text">{replyPreview}</div>
+          </div>
+        )}
+        <div className="message-text-content" dangerouslySetInnerHTML={{ __html: escapeHtml(cleanText || msg.text || '') }} />
+      </>
+    );
+  };
+
+  // Группировка сообщений по дате
+  const groupMessagesByDate = (messagesList) => {
+    const groups = [];
+    let currentDate = null;
+    let currentGroup = [];
+
+    messagesList.forEach(msg => {
+      const msgDate = new Date(msg.timestamp).toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+
+      if (msgDate !== currentDate) {
+        if (currentGroup.length > 0) {
+          groups.push({ date: currentDate, messages: currentGroup });
+        }
+        currentDate = msgDate;
+        currentGroup = [msg];
+      } else {
+        currentGroup.push(msg);
+      }
+    });
+
+    if (currentGroup.length > 0) {
+      groups.push({ date: currentDate, messages: currentGroup });
+    }
+
+    return groups;
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   // Регистрация
   const handleRegister = async () => {
-    // Валидация на клиенте
     if (loginUsername.length < 3 || loginUsername.length > 20) {
       alert('Имя пользователя должно быть от 3 до 20 символов');
       return;
@@ -114,7 +395,7 @@ function App() {
           switch (data.type) {
             case 'message':
               if (selectedUser && data.from === selectedUser.id) {
-                setMessages(prev => [...prev, {
+                const newMsg = {
                   id: data.id,
                   from_user: data.from,
                   to_user: data.to,
@@ -122,8 +403,10 @@ function App() {
                   timestamp: data.timestamp,
                   read: data.read,
                   reply_to: data.reply_to,
-                  forwarded_from: data.forwarded_from
-                }]);
+                  forwarded_from: data.forwarded_from,
+                  reactions: {}
+                };
+                setMessages(prev => [...prev, newMsg]);
                 socket.send(JSON.stringify({ type: 'read', from: data.from, to: user.id }));
               }
               break;
@@ -231,7 +514,13 @@ function App() {
           if (!res.ok) throw new Error('Network response was not ok');
           return res.json();
         })
-        .then(data => setMessages(data))
+        .then(data => {
+          const messagesWithReactions = data.map(msg => ({
+            ...msg,
+            reactions: msg.reactions || {}
+          }));
+          setMessages(messagesWithReactions);
+        })
         .catch(err => {
           console.error('Error loading messages:', err);
           setMessages([]);
@@ -247,19 +536,25 @@ function App() {
     const tempId = Date.now();
     let textToSend = trimmedText;
 
+    // Если есть ответ, добавляем префикс с красивым превью
     if (replyTo) {
-      textToSend = `↩️ Ответ: "${replyTo.text.substring(0, 50)}"\n${trimmedText}`;
+      const preview = getMessagePreview(replyTo);
+      textToSend = `↩️ Ответ: "${preview}"\n${trimmedText}`;
     }
 
-    setMessages(prev => [...prev, {
+    const newMsg = {
       id: tempId,
       from_user: user.id,
       to_user: selectedUser.id,
       text: textToSend,
       timestamp: Date.now(),
       read: 0,
-      reply_to: replyTo?.id
-    }]);
+      reply_to: replyTo?.id || null,
+      forwarded_from: null,
+      reactions: {}
+    };
+
+    setMessages(prev => [...prev, newMsg]);
 
     ws.send(JSON.stringify({
       type: 'message',
@@ -267,7 +562,7 @@ function App() {
       from: user.id,
       to: selectedUser.id,
       text: textToSend,
-      reply_to: replyTo?.id
+      reply_to: replyTo?.id || null
     }));
 
     setInputText('');
@@ -276,13 +571,19 @@ function App() {
 
   // ✏️ Редактирование
   const handleEdit = (message) => {
-    const newText = prompt('Редактировать сообщение:', message.text);
+    const cleanText = getCleanText(message.text);
+    const newText = prompt('Редактировать сообщение:', cleanText || message.text);
     if (newText && newText.trim() && ws) {
+      const replyPreview = getReplyPreview(message.text);
+      let textToSend = newText.trim();
+      if (replyPreview) {
+        textToSend = `↩️ Ответ: "${replyPreview}"\n${newText.trim()}`;
+      }
       ws.send(JSON.stringify({
         type: 'edit_message',
         messageId: message.id,
         to: selectedUser.id,
-        text: newText.trim()
+        text: textToSend
       }));
     }
   };
@@ -302,6 +603,19 @@ function App() {
   const addReaction = (messageId, reaction) => {
     if (!ws || !selectedUser) return;
 
+    setMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        const reactions = msg.reactions || {};
+        if (reactions[user.id] === reaction) {
+          delete reactions[user.id];
+        } else {
+          reactions[user.id] = reaction;
+        }
+        return { ...msg, reactions };
+      }
+      return msg;
+    }));
+
     ws.send(JSON.stringify({
       type: 'reaction',
       messageId: messageId,
@@ -317,7 +631,8 @@ function App() {
   const forwardMessage = (message) => {
     if (!ws || !selectedUser) return;
 
-    const forwardText = `📎 Переслано: ${message.text}`;
+    const cleanText = getCleanText(message.text);
+    const forwardText = `📎 Переслано: ${cleanText || message.text}`;
 
     ws.send(JSON.stringify({
       type: 'message',
@@ -328,12 +643,11 @@ function App() {
     }));
   };
 
-  // 📁 Отправка файла с валидацией
+  // 📁 Отправка файла
   const sendFile = async (event) => {
     const file = event.target.files[0];
     if (!file || !selectedUser || !ws || isConnecting) return;
 
-    // Проверка размера файла (50 MB)
     const MAX_FILE_SIZE = 50 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       alert(`Файл слишком большой! Максимальный размер: 50 MB. Ваш файл: ${(file.size / 1024 / 1024).toFixed(1)} MB`);
@@ -343,7 +657,6 @@ function App() {
       return;
     }
 
-    // Проверка типа файла
     const allowedTypes = ['image/', 'video/', 'audio/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
     const isAllowed = allowedTypes.some(type => file.type.startsWith(type) || file.type === type);
 
@@ -368,11 +681,11 @@ function App() {
       if (fileData.type === 'image') {
         fileText = `📷 Изображение: ${API_URL}${fileData.url}`;
       } else if (fileData.type === 'audio') {
-        fileText = `🎵 Аудио: ${fileData.name}`;
+        fileText = `🎵 Аудио: ${fileData.name} ${API_URL}${fileData.url}`;
       } else if (fileData.type === 'video') {
-        fileText = `🎬 Видео: ${fileData.name}`;
+        fileText = `🎬 Видео: ${fileData.name} ${API_URL}${fileData.url}`;
       } else {
-        fileText = `📎 Файл: ${fileData.name}`;
+        fileText = `📎 Файл: ${fileData.name} ${API_URL}${fileData.url}`;
       }
 
       ws.send(JSON.stringify({
@@ -388,7 +701,8 @@ function App() {
         to_user: selectedUser.id,
         text: fileText,
         timestamp: Date.now(),
-        read: 0
+        read: 0,
+        reactions: {}
       }]);
 
     } catch (error) {
@@ -409,12 +723,21 @@ function App() {
 
   const reactionsList = ['👍', '❤️', '😂', '😮', '😢', '😡'];
 
+  // Фильтрация пользователей по поиску
+  const filteredUsers = users.filter(u =>
+    u.username.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   // Форма входа
   if (!user) {
     return (
       <div className="auth-container">
         <div className="auth-box">
-          <h2>{isLogin ? 'Вход' : 'Регистрация'}</h2>
+          <div className="logo">💬</div>
+          <h2>{isLogin ? 'Добро пожаловать' : 'Создать аккаунт'}</h2>
+          <p className="subtitle">
+            {isLogin ? 'Войдите в свой аккаунт' : 'Зарегистрируйтесь и начните общение'}
+          </p>
           <input
             type="text"
             placeholder="Имя пользователя"
@@ -432,9 +755,12 @@ function App() {
           <button onClick={isLogin ? handleLogin : handleRegister}>
             {isLogin ? 'Войти' : 'Зарегистрироваться'}
           </button>
-          <p onClick={() => setIsLogin(!isLogin)}>
-            {isLogin ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войдите'}
-          </p>
+          <div className="auth-divider">
+            <span>или</span>
+          </div>
+          <span className="toggle-auth" onClick={() => setIsLogin(!isLogin)}>
+            {isLogin ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти'}
+          </span>
         </div>
       </div>
     );
@@ -443,111 +769,215 @@ function App() {
   // Основной интерфейс
   return (
     <div className="messenger">
+      {/* Sidebar */}
       <div className="sidebar">
-        <div className="user-info">
-          <div className="avatar">{user.username?.[0]?.toUpperCase() || 'U'}</div>
-          <div className="username">{user.username}</div>
-          {isConnecting && <span className="status-connecting">⏳</span>}
-        </div>
-        <div className="users-list">
-          <h3>Контакты</h3>
-          {users.map(u => (
-            <div
-              key={u.id}
-              className={`user-item ${selectedUser?.id === u.id ? 'active' : ''}`}
-              onClick={() => setSelectedUser(u)}
-            >
-              <div className="avatar small">{u.username?.[0]?.toUpperCase() || 'U'}</div>
-              <div className="user-details">
-                <div className="username">{u.username}</div>
-                <div className="status">{u.online ? '🟢 Онлайн' : '⚫ Оффлайн'}</div>
-              </div>
+        <div className="user-profile">
+          <div
+            className="avatar"
+            style={{ background: getAvatarColor(user.username) }}
+          >
+            {user.username?.[0]?.toUpperCase() || 'U'}
+          </div>
+          <div className="user-info">
+            <div className="username">{user.username}</div>
+            <div className="user-status">
+              <span className="dot"></span>
+              {isConnecting ? 'Подключение...' : 'В сети'}
             </div>
-          ))}
+          </div>
+          <div className="profile-actions">
+            <button title="Настройки">⚙️</button>
+          </div>
+        </div>
+
+        <div className="search-bar">
+          <input
+            type="text"
+            placeholder="Поиск контактов..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        <div className="chats-list">
+          <div className="section-title">Контакты</div>
+          {filteredUsers.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🔍</div>
+              <h3>Ничего не найдено</h3>
+              <p>Попробуйте изменить запрос</p>
+            </div>
+          ) : (
+            filteredUsers.map(u => (
+              <div
+                key={u.id}
+                className={`chat-item ${selectedUser?.id === u.id ? 'active' : ''}`}
+                onClick={() => setSelectedUser(u)}
+              >
+                <div
+                  className="avatar"
+                  style={{ background: getAvatarColor(u.username) }}
+                >
+                  {u.username?.[0]?.toUpperCase() || 'U'}
+                  {u.online && <span className="online-dot"></span>}
+                </div>
+                <div className="chat-info">
+                  <div className="chat-name">{u.username}</div>
+                  <div className="chat-last-msg">
+                    {u.online ? '🟢 В сети' : '⚫ Не в сети'}
+                  </div>
+                </div>
+                <div className="chat-meta">
+                  <div className="chat-time">
+                    {u.last_seen ? new Date(u.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
+      {/* Chat Area */}
       <div className="chat-area">
         {selectedUser ? (
           <>
+            {/* Chat Header */}
             <div className="chat-header">
-              <div className="avatar">{selectedUser.username?.[0]?.toUpperCase() || 'U'}</div>
-              <div>
-                <div className="username">{selectedUser.username}</div>
-                <div className="status">
-                  {typing ? '✍️ Печатает...' : (selectedUser.online ? '🟢 Онлайн' : 'Не в сети')}
+              <div
+                className="avatar"
+                style={{ background: getAvatarColor(selectedUser.username) }}
+              >
+                {selectedUser.username?.[0]?.toUpperCase() || 'U'}
+              </div>
+              <div className="chat-user-info">
+                <div className="chat-user-name">{selectedUser.username}</div>
+                <div className={`chat-user-status ${selectedUser.online ? 'online' : ''}`}>
+                  {typing ? '✍️ Печатает...' : (selectedUser.online ? '🟢 В сети' : '⚫ Не в сети')}
                 </div>
+              </div>
+              <div className="chat-actions">
+                <button title="Поиск">🔍</button>
               </div>
             </div>
 
+            {/* Messages */}
             <div className="messages-container">
-              {messages.map(msg => (
-                <div
-                  key={msg.id}
-                  className={`message ${msg.from_user === user.id ? 'sent' : 'received'} ${msg.deleted ? 'deleted' : ''}`}
-                >
-                  <div className="message-actions">
-                    <button onClick={() => setReplyTo(msg)} title="Ответить">↩️</button>
-                    <button onClick={() => forwardMessage(msg)} title="Переслать">📎</button>
-                    {msg.from_user === user.id && (
-                      <button onClick={() => handleEdit(msg)} title="Редактировать">✏️</button>
-                    )}
-                    <button onClick={() => setShowReactions(showReactions === msg.id ? null : msg.id)} title="Реакции">😊</button>
-                    {msg.from_user === user.id && (
-                      <button onClick={() => handleDelete(msg.id)} title="Удалить">🗑️</button>
-                    )}
+              {groupMessagesByDate(messages).map((group, groupIdx) => (
+                <React.Fragment key={groupIdx}>
+                  <div className="date-divider">
+                    <span>{group.date}</span>
                   </div>
+                  {group.messages.map(msg => {
+                    const isOwn = msg.from_user === user.id;
+                    const isDeleted = msg.deleted || msg.text === '🗑️ Сообщение удалено';
+                    const msgReactions = msg.reactions || {};
+                    const reactionEntries = Object.entries(msgReactions);
 
-                  {showReactions === msg.id && (
-                    <div className="reactions-picker">
-                      {reactionsList.map(r => (
-                        <button key={r} onClick={() => addReaction(msg.id, r)}>{r}</button>
-                      ))}
-                    </div>
-                  )}
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`message ${isOwn ? 'sent' : 'received'} ${isDeleted ? 'deleted' : ''}`}
+                      >
+                        <div className="message-wrapper">
+                          {/* Message Actions */}
+                          {!isDeleted && (
+                            <div className="message-actions">
+                              <button onClick={() => setReplyTo(msg)} title="Ответить">↩️</button>
+                              <button onClick={() => forwardMessage(msg)} title="Переслать">📎</button>
+                              {isOwn && (
+                                <button onClick={() => handleEdit(msg)} title="Редактировать">✏️</button>
+                              )}
+                              <button onClick={() => setShowReactions(showReactions === msg.id ? null : msg.id)} title="Реакции">😊</button>
+                              {isOwn && (
+                                <button onClick={() => handleDelete(msg.id)} title="Удалить">🗑️</button>
+                              )}
+                            </div>
+                          )}
 
-                  <div className="message-content">
-                    {msg.reply_to && (
-                      <div className="reply-preview">
-                        <div className="reply-indicator">↩️ Ответ</div>
+                          {/* Reactions Picker */}
+                          {!isDeleted && showReactions === msg.id && (
+                            <div className="reactions-picker">
+                              {reactionsList.map(r => (
+                                <button key={r} onClick={() => addReaction(msg.id, r)}>{r}</button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Message Bubble */}
+                          <div className="bubble">
+                            {renderMessageContent(msg, isOwn)}
+                          </div>
+
+                          {/* Message Footer */}
+                          <div className="message-footer">
+                            <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            {isOwn && !isDeleted && (
+                              <span className="read-status">{msg.read ? '✓✓' : '✓'}</span>
+                            )}
+                            {msg.edited && !isDeleted && <span className="edited-mark">(ред.)</span>}
+                          </div>
+
+                          {/* Reactions Display */}
+                          {!isDeleted && reactionEntries.length > 0 && (
+                            <div className="reactions-display">
+                              {reactionEntries.map(([userId, reaction]) => (
+                                <span key={userId} className="reaction">
+                                  {reaction}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    {msg.forwarded_from && (
-                      <div className="forward-indicator">📎 Переслано</div>
-                    )}
-                    <div className="message-text" dangerouslySetInnerHTML={{ __html: escapeHtml(msg.text) }} />
-                    {msg.edited && <span className="edited-indicator"> (ред.)</span>}
-                    <div className="message-time">
-                      {new Date(msg.timestamp).toLocaleTimeString()}
-                      {msg.from_user === user.id && (
-                        <span className="read-status">{msg.read ? '✓✓' : '✓'}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                    );
+                  })}
+                </React.Fragment>
               ))}
               <div ref={messagesEndRef} />
             </div>
 
-            {replyTo && (
-              <div className="reply-bar">
-                <span>Ответ: {replyTo.text.substring(0, 50)}...</span>
-                <button onClick={() => setReplyTo(null)}>✖️</button>
+            {/* Typing Indicator */}
+            {typing && (
+              <div className="typing-indicator">
+                <span>{selectedUser.username} печатает</span>
+                <div className="dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
               </div>
             )}
 
+            {/* Reply Bar */}
+            {replyTo && (
+              <div className="reply-bar">
+                <div className="reply-info">
+                  <span className="reply-label">↩️ Ответ</span>
+                  <span className="reply-text">
+                    {getMessagePreview(replyTo)}
+                  </span>
+                </div>
+                <button className="reply-close" onClick={() => setReplyTo(null)}>✖</button>
+              </div>
+            )}
+
+            {/* Input Area */}
             <div className="input-area">
-              <input
-                ref={inputRef}
-                type="text"
-                placeholder="Введите сообщение..."
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                onKeyUp={handleTyping}
-                disabled={isConnecting}
-              />
-              <label className="file-button">
+              <div className="input-wrapper">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  placeholder="Введите сообщение..."
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  onKeyUp={handleTyping}
+                  disabled={isConnecting}
+                />
+                <button className="emoji-btn" title="Эмодзи">😊</button>
+              </div>
+              <label className="file-btn" title="Прикрепить файл">
                 📎
                 <input
                   type="file"
@@ -557,13 +987,21 @@ function App() {
                   disabled={isConnecting}
                 />
               </label>
-              <button onClick={sendMessage} disabled={isConnecting}>
-                {isConnecting ? '⏳' : '📤'}
+              <button
+                className="send-btn"
+                onClick={sendMessage}
+                disabled={!inputText.trim() || isConnecting}
+              >
+                {isConnecting ? '⏳' : '➤'}
               </button>
             </div>
           </>
         ) : (
-          <div className="no-chat">Выберите контакт</div>
+          <div className="empty-chat">
+            <div className="empty-icon">💬</div>
+            <h3>Выберите чат</h3>
+            <p>Начните общение, выбрав контакт из списка слева</p>
+          </div>
         )}
       </div>
     </div>

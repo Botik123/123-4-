@@ -52,12 +52,10 @@ const processedMessages = new Set();
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
 
-  // Проверка на пустые поля
   if (!username || !password) {
     return res.status(400).json({ error: 'Имя пользователя и пароль обязательны' });
   }
 
-  // Проверка длины
   if (username.length < 3 || username.length > 20) {
     return res.status(400).json({ error: 'Имя пользователя должно быть от 3 до 20 символов' });
   }
@@ -66,7 +64,6 @@ app.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Пароль должен быть минимум 4 символа' });
   }
 
-  // Проверка на запрещённые символы
   if (!/^[a-zA-Zа-яА-Я0-9_]+$/.test(username)) {
     return res.status(400).json({ error: 'Имя пользователя содержит недопустимые символы' });
   }
@@ -205,7 +202,6 @@ wss.on('connection', (ws) => {
 
       switch (parsed.type) {
         case 'auth': {
-          // Проверяем, что пользователь существует
           db.get('SELECT id FROM users WHERE id = ?', [parsed.userId], (err, user) => {
             if (err || !user) {
               ws.send(JSON.stringify({ type: 'error', message: 'Недействительный пользователь' }));
@@ -259,7 +255,6 @@ wss.on('connection', (ws) => {
           }
           processedMessages.add(messageId);
 
-          // Очищаем старые ID
           if (processedMessages.size > 1000) {
             const toDelete = [...processedMessages].slice(0, 500);
             toDelete.forEach(id => processedMessages.delete(id));
@@ -267,7 +262,6 @@ wss.on('connection', (ws) => {
 
           const timestamp = Date.now();
 
-          // Проверка на пустое сообщение
           if (!parsed.text || parsed.text.trim() === '') {
             ws.send(JSON.stringify({ type: 'error', message: 'Сообщение не может быть пустым' }));
             return;
@@ -284,6 +278,7 @@ wss.on('connection', (ws) => {
                 return;
               }
 
+              // Отправляем сообщение получателю
               const recipientWs = clients.get(parsed.to);
               if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
                 recipientWs.send(JSON.stringify({
@@ -298,6 +293,7 @@ wss.on('connection', (ws) => {
                 }));
               }
 
+              // Подтверждение отправителю
               ws.send(JSON.stringify({ type: 'message_sent', id: messageId, timestamp: timestamp }));
             }
           );
@@ -310,23 +306,47 @@ wss.on('connection', (ws) => {
             return;
           }
 
-          db.run('UPDATE messages SET text = ?, edited = 1, edited_at = ? WHERE id = ?',
-            [parsed.text, Date.now(), parsed.messageId],
-            (err) => {
+          const newText = parsed.text.trim();
+          const messageId = parsed.messageId;
+          const targetUserId = parsed.to;
+
+          db.run(
+            'UPDATE messages SET text = ?, edited = 1, edited_at = ? WHERE id = ?',
+            [newText, Date.now(), messageId],
+            function(err) {
               if (err) {
                 console.error('Error editing message:', err);
                 ws.send(JSON.stringify({ type: 'error', message: 'Ошибка редактирования' }));
                 return;
               }
 
-              const editRecipient = clients.get(parsed.to);
-              if (editRecipient && editRecipient.readyState === WebSocket.OPEN) {
-                editRecipient.send(JSON.stringify({
+              if (this.changes === 0) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Сообщение не найдено' }));
+                return;
+              }
+
+              console.log(`✏️ Сообщение ${messageId} отредактировано`);
+
+              // Отправляем обновление ОТПРАВИТЕЛЮ
+              ws.send(JSON.stringify({
+                type: 'message_edited',
+                messageId: messageId,
+                text: newText,
+                edited_at: Date.now()
+              }));
+
+              // Отправляем обновление ПОЛУЧАТЕЛЮ
+              const recipientWs = clients.get(targetUserId);
+              if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+                recipientWs.send(JSON.stringify({
                   type: 'message_edited',
-                  messageId: parsed.messageId,
-                  text: parsed.text,
+                  messageId: messageId,
+                  text: newText,
                   edited_at: Date.now()
                 }));
+                console.log(`📤 Отправлено обновление редактирования получателю ${targetUserId}`);
+              } else {
+                console.log(`⚠️ Получатель ${targetUserId} не в сети`);
               }
             }
           );
@@ -334,20 +354,42 @@ wss.on('connection', (ws) => {
         }
 
         case 'delete_message': {
-          db.run('UPDATE messages SET text = "🗑️ Сообщение удалено", deleted = 1 WHERE id = ?', [parsed.messageId],
-            (err) => {
+          const messageId = parsed.messageId;
+          const targetUserId = parsed.to;
+
+          db.run(
+            'UPDATE messages SET text = "🗑️ Сообщение удалено", deleted = 1 WHERE id = ?',
+            [messageId],
+            function(err) {
               if (err) {
                 console.error('Error deleting message:', err);
                 ws.send(JSON.stringify({ type: 'error', message: 'Ошибка удаления' }));
                 return;
               }
 
-              const deleteRecipient = clients.get(parsed.to);
-              if (deleteRecipient && deleteRecipient.readyState === WebSocket.OPEN) {
-                deleteRecipient.send(JSON.stringify({
+              if (this.changes === 0) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Сообщение не найдено' }));
+                return;
+              }
+
+              console.log(`🗑️ Сообщение ${messageId} удалено`);
+
+              // Отправляем обновление ОТПРАВИТЕЛЮ
+              ws.send(JSON.stringify({
+                type: 'message_deleted',
+                messageId: messageId
+              }));
+
+              // Отправляем обновление ПОЛУЧАТЕЛЮ
+              const recipientWs = clients.get(targetUserId);
+              if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+                recipientWs.send(JSON.stringify({
                   type: 'message_deleted',
-                  messageId: parsed.messageId
+                  messageId: messageId
                 }));
+                console.log(`📤 Отправлено обновление удаления получателю ${targetUserId}`);
+              } else {
+                console.log(`⚠️ Получатель ${targetUserId} не в сети`);
               }
             }
           );
@@ -356,10 +398,15 @@ wss.on('connection', (ws) => {
 
         case 'reaction': {
           const reactionId = uuidv4();
+          const messageId = parsed.messageId;
+          const userId = parsed.userId;
+          const targetUserId = parsed.to;
+          const reaction = parsed.reaction;
+
           db.run(
             `INSERT OR REPLACE INTO message_reactions (id, message_id, user_id, reaction, timestamp) 
              VALUES (?, ?, ?, ?, ?)`,
-            [reactionId, parsed.messageId, parsed.userId, parsed.reaction, Date.now()],
+            [reactionId, messageId, userId, reaction, Date.now()],
             (err) => {
               if (err) {
                 console.error('Error adding reaction:', err);
@@ -367,14 +414,26 @@ wss.on('connection', (ws) => {
                 return;
               }
 
-              const reactionRecipient = clients.get(parsed.to);
-              if (reactionRecipient && reactionRecipient.readyState === WebSocket.OPEN) {
-                reactionRecipient.send(JSON.stringify({
+              console.log(`😊 Реакция ${reaction} на сообщение ${messageId} от пользователя ${userId}`);
+
+              // Отправляем реакцию ОТПРАВИТЕЛЮ
+              ws.send(JSON.stringify({
+                type: 'reaction',
+                messageId: messageId,
+                userId: userId,
+                reaction: reaction
+              }));
+
+              // Отправляем реакцию ПОЛУЧАТЕЛЮ
+              const recipientWs = clients.get(targetUserId);
+              if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+                recipientWs.send(JSON.stringify({
                   type: 'reaction',
-                  messageId: parsed.messageId,
-                  userId: parsed.userId,
-                  reaction: parsed.reaction
+                  messageId: messageId,
+                  userId: userId,
+                  reaction: reaction
                 }));
+                console.log(`📤 Отправлена реакция получателю ${targetUserId}`);
               }
             }
           );
@@ -382,7 +441,9 @@ wss.on('connection', (ws) => {
         }
 
         case 'read': {
-          db.run('UPDATE messages SET read = 1 WHERE from_user = ? AND to_user = ?', [parsed.from, parsed.to],
+          db.run(
+            'UPDATE messages SET read = 1 WHERE from_user = ? AND to_user = ?',
+            [parsed.from, parsed.to],
             (err) => {
               if (err) {
                 console.error('Error marking as read:', err);
@@ -391,7 +452,11 @@ wss.on('connection', (ws) => {
 
               const senderWs = clients.get(parsed.from);
               if (senderWs && senderWs.readyState === WebSocket.OPEN) {
-                senderWs.send(JSON.stringify({ type: 'message_read', from: parsed.to, to: parsed.from }));
+                senderWs.send(JSON.stringify({
+                  type: 'message_read',
+                  from: parsed.to,
+                  to: parsed.from
+                }));
               }
             }
           );
@@ -401,7 +466,10 @@ wss.on('connection', (ws) => {
         case 'typing': {
           const targetWs = clients.get(parsed.to);
           if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-            targetWs.send(JSON.stringify({ type: 'typing', from: parsed.from }));
+            targetWs.send(JSON.stringify({
+              type: 'typing',
+              from: parsed.from
+            }));
           }
           break;
         }
@@ -439,7 +507,6 @@ const pingInterval = setInterval(() => {
   });
 }, 30000);
 
-// Очищаем интервал при закрытии сервера
 wss.on('close', () => {
   clearInterval(pingInterval);
 });
