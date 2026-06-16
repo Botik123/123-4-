@@ -1,0 +1,40 @@
+# Зависимости
+node_modules/
+package-lock.json
+
+# База данных
+*.db
+*.db-journal
+
+# Загрузки
+server/uploads/
+*.jpg
+*.png
+*.gif
+*.mp4
+*.mp3
+*.pdf
+*.doc
+*.docx
+
+# Логи
+*.log
+npm-debug.log*
+
+# ОС
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Сборка
+client/build/
+client/dist/
+server/dist/
+
+# Переменные окружения
+.env
+.env.local
