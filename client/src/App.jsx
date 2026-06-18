@@ -33,7 +33,8 @@ function App() {
     loading: usersLoading, 
     fetchUsers,
     addUser,
-    updateUserStatus
+    updateUserStatus,
+    setUsers
   } = useUsers();
   
   // === MESSAGES HOOK ===

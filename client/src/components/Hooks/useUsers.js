@@ -77,6 +77,7 @@ export const useUsers = () => {
     loading,
     fetchUsers,
     addUser,
-    updateUserStatus
+    updateUserStatus,
+    setUsers
   };
 };
