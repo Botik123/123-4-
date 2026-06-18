@@ -333,6 +333,7 @@ export const useMessages = (userId, otherUserId) => {
     updateMessage,
     removeMessage,
     markAsRead,
-    pendingMessages
+    pendingMessages,
+    setMessages
   };
 };

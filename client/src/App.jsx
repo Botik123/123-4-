@@ -4,7 +4,7 @@
  * Интеграция всех hooks и компонентов, управление состоянием
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import AuthForm from './components/Auth/AuthForm';
 import Sidebar from './components/Sidebar/Sidebar';
@@ -50,7 +50,8 @@ function App() {
     removeMessage,
     loadHistory,
     clearMessages,
-    markAsRead
+    markAsRead,
+    setMessages
   } = useMessages(user?.id, selectedUser?.id);
   
   // === WEBSOCKET HOOK ===
@@ -87,14 +88,13 @@ function App() {
       console.log(`📖 onMessagesRead: byUserId=${data.byUserId}, current user=${user?.id}`);
       // Обновляем галочки у сообщений которые МЫ отправили и ИХ прочитали
       // data.byUserId - это кто прочитал (собеседник)
-      // Значит обновляем сообщения где from_user = user.id (наши сообщения)
-      setMessages(prev => prev.map(msg => {
-        if (msg.from_user === user?.id && msg.to_user === data.byUserId) {
+      // Используем updateMessage для каждого сообщения
+      messages.forEach(msg => {
+        if (msg.from_user === user?.id && msg.to_user === data.byUserId && msg.read !== 1) {
           console.log(`✅ Обновляем сообщение ${msg.id} как прочитанное`);
-          return { ...msg, read: 1 };
+          updateMessage(msg.id, { read: 1 });
         }
-        return msg;
-      }));
+      });
     },
     // Реакция на сообщение (получена от другого пользователя)
     onReaction: (data) => {
