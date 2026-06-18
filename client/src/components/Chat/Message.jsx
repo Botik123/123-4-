@@ -122,7 +122,15 @@ const Message = memo(({
   
   const isDeleted = message.deleted || message.text === '🗑️ Сообщение удалено';
   const msgReactions = message.reactions || {};
-  const reactionEntries = Object.entries(msgReactions);
+  // Группируем реакции по эмодзи
+  const reactionGroups = {};
+  Object.entries(msgReactions).forEach(([userId, reaction]) => {
+    if (!reactionGroups[reaction]) {
+      reactionGroups[reaction] = [];
+    }
+    reactionGroups[reaction].push(userId);
+  });
+  const reactionEntries = Object.entries(reactionGroups);
   
   const replyMessage = message.reply_to 
     ? allMessages.find(m => m.id === message.reply_to) 
@@ -194,8 +202,10 @@ const Message = memo(({
 
         {!isDeleted && reactionEntries.length > 0 && (
           <div className="reactions-display">
-            {reactionEntries.map(([userId, reaction]) => (
-              <span key={userId} className="reaction">{reaction}</span>
+            {reactionEntries.map(([reaction, userIds]) => (
+              <span key={reaction} className="reaction" title={userIds.join(', ')}>
+                {reaction} {userIds.length > 1 ? `×${userIds.length}` : ''}
+              </span>
             ))}
           </div>
         )}

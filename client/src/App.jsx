@@ -78,11 +78,12 @@ function App() {
     onMessageDeleted: (data) => {
       updateMessage(data.messageId, { text: '🗑️ Сообщение удалено', deleted: true });
     },
-    // Реакция на сообщение
+    // Реакция на сообщение (получена от другого пользователя)
     onReaction: (data) => {
-      const targetUserId = data.to || selectedUser?.id;
-      if (targetUserId) {
-        addReaction(data.messageId, data.reaction, targetUserId);
+      // data: { messageId, userId, reaction, to }
+      // Обновляем реакцию в текущем чате
+      if (selectedUser) {
+        addReaction(data.messageId, data.reaction, selectedUser.id);
       }
     },
     // Изменение статуса пользователя (онлайн/оффлайн)

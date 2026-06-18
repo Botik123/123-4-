@@ -73,15 +73,53 @@ export const parseFileMessage = (text) => {
   }
   
   // Парсинг изображений: 📷 Изображение: name url
-  const imageMatch = text.match(/📷 Изображение:\s*(.+?)\s+(https?:\/\/\S+)$/);
+  const imageMatch = text.match(/📷 Изображение:\s*(.+?)\s+(\/uploads\/\S+|https?:\/\/\S+)$/);
   if (imageMatch) {
+    const url = imageMatch[2].startsWith('/') ? `http://localhost:3002${imageMatch[2]}` : imageMatch[2];
     return { 
       type: 'image', 
       name: imageMatch[1]?.trim() || 'Изображение',
-      url: imageMatch[2] 
+      url 
     };
   }
   
+  // Парсинг аудио: 🎵 Аудио: name url
+  const audioMatch = text.match(/🎵 Аудио:\s*(.+?)\s+(\/uploads\/\S+|https?:\/\/\S+)$/);
+  if (audioMatch) {
+    const url = audioMatch[2].startsWith('/') ? `http://localhost:3002${audioMatch[2]}` : audioMatch[2];
+    return { 
+      type: 'audio', 
+      name: audioMatch[1]?.trim() || 'Аудио', 
+      url 
+    };
+  }
+  
+  // Парсинг видео: 🎬 Видео: name url
+  const videoMatch = text.match(/🎬 Видео:\s*(.+?)\s+(\/uploads\/\S+|https?:\/\/\S+)$/);
+  if (videoMatch) {
+    const url = videoMatch[2].startsWith('/') ? `http://localhost:3002${videoMatch[2]}` : videoMatch[2];
+    return { 
+      type: 'video', 
+      name: videoMatch[1]?.trim() || 'Видео', 
+      url 
+    };
+  }
+  
+  // Парсинг файлов: 📎 Файл: name url
+  const fileMatch = text.match(/📎 Файл:\s*(.+?)\s+(\/uploads\/\S+|https?:\/\/\S+)$/);
+  if (fileMatch) {
+    const url = fileMatch[2].startsWith('/') ? `http://localhost:3002${fileMatch[2]}` : fileMatch[2];
+    return { 
+      type: 'file', 
+      name: fileMatch[1]?.trim() || 'Файл', 
+      url 
+    };
+  }
+  
+  return null;
+};
+  }
+
   // Парсинг аудио: 🎵 Аудио: name url
   const audioMatch = text.match(/🎵 Аудио:\s*(.+?)\s+(https?:\/\/\S+)$/);
   if (audioMatch) {
