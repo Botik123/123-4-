@@ -41,8 +41,7 @@ function App() {
     updateMessage,
     removeMessage,
     loadHistory,
-    markAsRead,
-    pendingMessages
+    markAsRead
   } = useMessages(user?.id, selectedUser?.id);
   
   const {
@@ -51,7 +50,7 @@ function App() {
     connect,
     disconnect,
     joinRoom,
-    leaveRoom
+    leavRoom
   } = useWebSocket({
     onMessage: (data) => {
       addMessage(data);
@@ -121,7 +120,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Подписка на комнату при выборе пользователя
+  
   useEffect(() => {
     if (selectedUser && user) {
       const chatId = [user.id, selectedUser.id].sort().join('_');
@@ -129,14 +128,13 @@ function App() {
       joinRoom(chatId);
       loadHistory(user.id, selectedUser.id);
       
-      // На мобилках открываем чат
       if (window.innerWidth <= 768) {
         setIsMobileChatOpen(true);
       }
     }
     
     return () => {
-      if (currentChatId) {
+     if (currentChatId) {
         leaveRoom(currentChatId);
       }
     };
@@ -160,9 +158,7 @@ function App() {
     }
   }, [messages, users, selectedUser, setUsers]);
 
-  // ============ ОБРАБОТЧИКИ ============
-
-  // Обработчик выбора пользователя (с адаптивом)
+  // Обработчики
   const handleSelectUser = (user) => {
     setSelectedUser(user);
     if (window.innerWidth <= 768) {
@@ -170,7 +166,6 @@ function App() {
     }
   };
 
-  // Обработчик кнопки "Назад" на мобилках
   const handleBack = () => {
     if (window.innerWidth <= 768) {
       setIsMobileChatOpen(false);
@@ -231,13 +226,11 @@ function App() {
     addReaction(messageId, reaction, selectedUser.id);
   };
 
-  // 🔥 Обработчик статуса печати с debounce
   const handleTyping = (isTyping) => {
     if (!selectedUser) return;
     if (isTyping) {
       sendTyping(selectedUser.id);
     } else {
-      // Отправляем событие "перестал печатать"
       sendTyping(selectedUser.id);
     }
   };
@@ -246,8 +239,6 @@ function App() {
     setIsDarkTheme(!isDarkTheme);
     document.documentElement.setAttribute('data-theme', !isDarkTheme ? 'dark' : 'light');
   };
-
-  // ============ РЕНДЕР ============
 
   if (!user) {
     return (
@@ -290,7 +281,7 @@ function App() {
         isConnecting={isConnecting}
         onBack={handleBack}
         isMobileOpen={isMobileChatOpen}
-        loading={messagesLoading} // 🔥 Передаём состояние загрузки
+        loading={messagesLoading}
       />
     </div>
   );

@@ -1,30 +1,8 @@
 const WebSocket = require('ws');
 const { verifyToken } = require('../middleware/auth');
 
-// Хранилище активных подключений
 const clients = new Map();
-// Хранилище комнат (chatId -> Set of userIds)
 const rooms = new Map();
-
-const authenticateWebSocket = (ws, req) => {
-  return new Promise((resolve, reject) => {
-    const token = req.headers['sec-websocket-protocol'] || 
-                   new URL(req.url, 'http://localhost').searchParams.get('token');
-    
-    if (!token) {
-      ws.close(1008, 'Token required');
-      return reject(new Error('Token required'));
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      ws.close(1008, 'Invalid token');
-      return reject(new Error('Invalid token'));
-    }
-
-    resolve(decoded.userId);
-  });
-};
 
 const setupWebSocket = (server) => {
   const wss = new WebSocket.Server({ 
@@ -38,41 +16,52 @@ const setupWebSocket = (server) => {
     let currentUserId = null;
     let currentRoom = null;
 
-    try {
-      currentUserId = await authenticateWebSocket(ws, req);
-      
-      if (clients.has(currentUserId)) {
-        const oldWs = clients.get(currentUserId);
-        if (oldWs && oldWs.readyState === WebSocket.OPEN) {
-          oldWs.close(1000, 'Duplicate connection');
-        }
-      }
-      
-      clients.set(currentUserId, ws);
-      
-      ws.send(JSON.stringify({ 
-        type: 'auth_success', 
-        userId: currentUserId 
-      }));
-
-      broadcastStatus(currentUserId, true);
-      broadcastOnlineUsers();
-      sendAllStatuses(ws);
-      
-      console.log(`✅ Пользователь ${currentUserId} авторизован (клиентов: ${clients.size})`);
-
-    } catch (error) {
-      console.error('❌ Ошибка авторизации:', error.message);
-      ws.close(1008, error.message);
-      return;
-    }
-
-    // Обработка сообщений
+    // 🔥 АУТЕНТИФИКАЦИЯ
     ws.on('message', async (data) => {
       try {
         if (!data || data.length === 0) return;
         const parsed = JSON.parse(data.toString());
         
+        // Обработка auth
+        if (parsed.type === 'auth' && !currentUserId) {
+          const token = parsed.token;
+          if (!token) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Token required' }));
+            return;
+          }
+          
+          const decoded = verifyToken(token);
+          if (!decoded) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid token' }));
+            ws.close(1008, 'Invalid token');
+            return;
+          }
+          
+          currentUserId = decoded.userId;
+          
+          if (clients.has(currentUserId)) {
+            const oldWs = clients.get(currentUserId);
+            if (oldWs && oldWs.readyState === WebSocket.OPEN) {
+              oldWs.close(1000, 'Duplicate connection');
+            }
+          }
+          
+          clients.set(currentUserId, ws);
+          
+          ws.send(JSON.stringify({ 
+            type: 'auth_success', 
+            userId: currentUserId 
+          }));
+
+          broadcastStatus(currentUserId, true);
+          broadcastOnlineUsers();
+          sendAllStatuses(ws);
+          
+          console.log(`✅ Пользователь ${currentUserId} авторизован (клиентов: ${clients.size})`);
+          return;
+        }
+        
+        // 🔥 ОБРАБОТКА КОМНАТ
         switch (parsed.type) {
           case 'join_room': {
             const { chatId } = parsed;
@@ -98,6 +87,7 @@ const setupWebSocket = (server) => {
             if (chatId && rooms.has(chatId)) {
               rooms.get(chatId).delete(currentUserId);
               console.log(`📌 Пользователь ${currentUserId} покинул комнату ${chatId}`);
+              ws.send(JSON.stringify({ type: 'room_left', chatId }));
             }
             break;
           }
@@ -112,7 +102,7 @@ const setupWebSocket = (server) => {
                   if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                     targetWs.send(JSON.stringify({
                       type: 'typing',
-                      from: parsed.from
+                      from: currentUserId
                     }));
                   }
                 }
@@ -122,7 +112,7 @@ const setupWebSocket = (server) => {
               if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                 targetWs.send(JSON.stringify({
                   type: 'typing',
-                  from: parsed.from
+                  from: currentUserId
                 }));
               }
             }
@@ -145,10 +135,10 @@ const setupWebSocket = (server) => {
       console.log(`🔌 Соединение закрыто: ${code} - ${reason || 'Без причины'}`);
       
       if (currentUserId) {
+        // Удаляем из всех комнат
         for (const [chatId, users] of rooms) {
           if (users.has(currentUserId)) {
             users.delete(currentUserId);
-            console.log(`📌 Пользователь ${currentUserId} удалён из комнаты ${chatId}`);
             if (users.size === 0) {
               rooms.delete(chatId);
             }
