@@ -14,6 +14,7 @@ function App() {
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
+  const [currentChatId, setCurrentChatId] = useState(null);
   const isConnectingRef = useRef(false);
 
   const { user, loading: authLoading, login, register, logout } = useAuth();
@@ -46,7 +47,9 @@ function App() {
     isConnecting,
     sendTyping,
     connect,
-    disconnect
+    disconnect,
+    joinRoom,
+    leaveRoom
   } = useWebSocket({
     onMessage: (data) => {
       addMessage(data);
@@ -100,23 +103,6 @@ function App() {
     }
   });
 
-  // Дебаг режим
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.__debug = {
-        parseFileMessage,
-        getCleanText,
-        getReplyPreview,
-        getMessages: () => messages,
-        getUsers: () => users,
-        getSelectedUser: () => selectedUser,
-        API_URL: 'http://localhost:3002',
-        setUsers: setUsers
-      };
-      console.log('✅ Дебаг режим активирован! Используй window.__debug');
-    }
-  }, [messages, users, selectedUser, setUsers]);
-
   // Подключаем WebSocket при авторизации
   useEffect(() => {
     if (user && !isConnectingRef.current) {
@@ -133,13 +119,39 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Загружаем историю при выборе пользователя
+  // 🔥 НОВОЕ: Подписка на комнату при выборе пользователя
   useEffect(() => {
-    if (user && selectedUser) {
+    if (selectedUser && user) {
+      const chatId = [user.id, selectedUser.id].sort().join('_');
+      setCurrentChatId(chatId);
+      joinRoom(chatId);
       loadHistory(user.id, selectedUser.id);
     }
+    
+    return () => {
+      if (currentChatId) {
+        leaveRoom(currentChatId);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser]);
+
+  // Дебаг режим
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__debug = {
+        parseFileMessage,
+        getCleanText,
+        getReplyPreview,
+        getMessages: () => messages,
+        getUsers: () => users,
+        getSelectedUser: () => selectedUser,
+        API_URL: 'http://localhost:3002',
+        setUsers: setUsers
+      };
+      console.log('✅ Дебаг режим активирован! Используй window.__debug');
+    }
+  }, [messages, users, selectedUser, setUsers]);
 
   // Обработчики
   const handleLogin = async (username, password) => {
@@ -158,14 +170,16 @@ function App() {
 
   const handleSendMessage = (text) => {
     if (!selectedUser) return;
-    sendMessage(selectedUser.id, text, replyTo?.id);
+    const chatId = currentChatId;
+    sendMessage(selectedUser.id, text, replyTo?.id, chatId);
     playSendSound();
     setReplyTo(null);
   };
 
   const handleFileSend = (fileText) => {
     if (!selectedUser) return;
-    sendMessage(selectedUser.id, fileText);
+    const chatId = currentChatId;
+    sendMessage(selectedUser.id, fileText, null, chatId);
     playSendSound();
   };
 

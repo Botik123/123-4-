@@ -8,7 +8,8 @@ router.use(authMiddleware);
 
 router.get('/', async (req, res) => {
   try {
-    const users = await db.getAllUsers(req.userId);
+    const userId = req.user.id;
+    const users = await db.getAllUsers(userId);
     
     const usersWithStatus = users.map(user => ({
       ...user,

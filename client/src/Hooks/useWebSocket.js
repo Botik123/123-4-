@@ -171,6 +171,15 @@ export const useWebSocket = ({
     send({ type: 'typing', to });
   }, [send]);
 
+  // 🔥 НОВЫЕ МЕТОДЫ ДЛЯ РАБОТЫ С КОМНАТАМИ
+  const joinRoom = useCallback((chatId) => {
+    send({ type: 'join_room', chatId });
+  }, [send]);
+
+  const leaveRoom = useCallback((chatId) => {
+    send({ type: 'leave_room', chatId });
+  }, [send]);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -185,6 +194,8 @@ export const useWebSocket = ({
     connect,
     disconnect,
     send,
-    sendTyping
+    sendTyping,
+    joinRoom,
+    leaveRoom
   };
 };

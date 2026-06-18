@@ -15,7 +15,6 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// 🔥 ФИКС: Хранилище с санитизацией имени
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -24,7 +23,6 @@ const storage = multer.diskStorage({
   }
 });
 
-// 🔥 ФИКС: Полная конфигурация Multer
 const upload = multer({
   storage,
   limits: { 
@@ -51,7 +49,6 @@ const upload = multer({
 
 router.use(authMiddleware);
 
-// 🔥 ФИКС: Обработка загрузки с очисткой при ошибке
 router.post('/', upload.single('file'), async (req, res) => {
   const file = req.file;
   
@@ -90,7 +87,6 @@ router.post('/', upload.single('file'), async (req, res) => {
   } catch (error) {
     console.error('Upload error:', error);
     
-    // 🔥 ФИКС: Удаляем файл при ошибке
     try {
       if (file && file.path) {
         fs.unlink(file.path, (err) => {

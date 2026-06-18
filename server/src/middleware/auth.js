@@ -27,7 +27,10 @@ const authMiddleware = (req, res, next) => {
     return res.status(401).json({ error: 'Недействительный токен' });
   }
 
-  req.userId = decoded.userId;
+  req.user = {
+    id: decoded.userId
+  };
+  
   next();
 };
 

@@ -3,11 +3,11 @@ const { verifyToken } = require('../middleware/auth');
 
 // Хранилище активных подключений
 const clients = new Map();
+// Хранилище комнат (chatId -> Set of userIds)
+const rooms = new Map();
 
-// 🔥 ФИКС: Аутентификация при подключении
 const authenticateWebSocket = (ws, req) => {
   return new Promise((resolve, reject) => {
-    // Получаем токен из заголовка или URL
     const token = req.headers['sec-websocket-protocol'] || 
                    new URL(req.url, 'http://localhost').searchParams.get('token');
     
@@ -36,12 +36,11 @@ const setupWebSocket = (server) => {
     console.log('🔌 Новое WebSocket соединение');
 
     let currentUserId = null;
+    let currentRoom = null;
 
-    // 🔥 ФИКС: Аутентификация при подключении
     try {
       currentUserId = await authenticateWebSocket(ws, req);
       
-      // Закрываем старое соединение если есть
       if (clients.has(currentUserId)) {
         const oldWs = clients.get(currentUserId);
         if (oldWs && oldWs.readyState === WebSocket.OPEN) {
@@ -75,16 +74,61 @@ const setupWebSocket = (server) => {
         const parsed = JSON.parse(data.toString());
         
         switch (parsed.type) {
-          case 'typing': {
-            const targetWs = clients.get(parsed.to);
-            if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-              targetWs.send(JSON.stringify({
-                type: 'typing',
-                from: parsed.from
-              }));
+          case 'join_room': {
+            const { chatId } = parsed;
+            if (!chatId) {
+              ws.send(JSON.stringify({ type: 'error', message: 'chatId required' }));
+              return;
+            }
+            
+            currentRoom = chatId;
+            
+            if (!rooms.has(chatId)) {
+              rooms.set(chatId, new Set());
+            }
+            rooms.get(chatId).add(currentUserId);
+            
+            console.log(`📌 Пользователь ${currentUserId} вошёл в комнату ${chatId}`);
+            ws.send(JSON.stringify({ type: 'room_joined', chatId }));
+            break;
+          }
+          
+          case 'leave_room': {
+            const { chatId } = parsed;
+            if (chatId && rooms.has(chatId)) {
+              rooms.get(chatId).delete(currentUserId);
+              console.log(`📌 Пользователь ${currentUserId} покинул комнату ${chatId}`);
             }
             break;
           }
+
+          case 'typing': {
+            const { to, chatId } = parsed;
+            if (chatId && rooms.has(chatId)) {
+              const roomUsers = rooms.get(chatId);
+              roomUsers.forEach(userId => {
+                if (userId !== currentUserId) {
+                  const targetWs = clients.get(userId);
+                  if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                    targetWs.send(JSON.stringify({
+                      type: 'typing',
+                      from: parsed.from
+                    }));
+                  }
+                }
+              });
+            } else {
+              const targetWs = clients.get(to);
+              if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(JSON.stringify({
+                  type: 'typing',
+                  from: parsed.from
+                }));
+              }
+            }
+            break;
+          }
+
           default:
             console.log('Неизвестный тип:', parsed.type);
         }
@@ -97,10 +141,20 @@ const setupWebSocket = (server) => {
       }
     });
 
-    // 🔥 ФИКС: Удаление при отключении
     ws.on('close', (code, reason) => {
       console.log(`🔌 Соединение закрыто: ${code} - ${reason || 'Без причины'}`);
+      
       if (currentUserId) {
+        for (const [chatId, users] of rooms) {
+          if (users.has(currentUserId)) {
+            users.delete(currentUserId);
+            console.log(`📌 Пользователь ${currentUserId} удалён из комнаты ${chatId}`);
+            if (users.size === 0) {
+              rooms.delete(chatId);
+            }
+          }
+        }
+        
         clients.delete(currentUserId);
         broadcastStatus(currentUserId, false);
         broadcastOnlineUsers();
@@ -117,7 +171,6 @@ const setupWebSocket = (server) => {
       }
     });
 
-    // Ping для проверки соединения
     const pingInterval = setInterval(() => {
       clients.forEach((client, userId) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -139,6 +192,65 @@ const setupWebSocket = (server) => {
 };
 
 // ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
+
+const sendMessageToRoom = (chatId, messageData) => {
+  const roomUsers = rooms.get(chatId);
+  if (!roomUsers) {
+    console.log(`⚠️ Комната ${chatId} не найдена`);
+    return false;
+  }
+
+  let sentCount = 0;
+  roomUsers.forEach(userId => {
+    const client = clients.get(userId);
+    if (client && client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({
+        type: 'message',
+        ...messageData
+      }));
+      sentCount++;
+    }
+  });
+  
+  console.log(`📤 Сообщение отправлено в комнату ${chatId}, доставлено: ${sentCount}`);
+  return sentCount > 0;
+};
+
+const sendMessageToUser = (to, messageData) => {
+  const recipientWs = clients.get(to);
+  if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+    recipientWs.send(JSON.stringify({
+      type: 'message',
+      ...messageData
+    }));
+    return true;
+  }
+  return false;
+};
+
+const notifyMessageUpdate = (to, type, data) => {
+  const recipientWs = clients.get(to);
+  if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
+    recipientWs.send(JSON.stringify({
+      type: type,
+      ...data
+    }));
+    return true;
+  }
+  return false;
+};
+
+const broadcastReaction = (messageId, userId, reaction, targetUserId) => {
+  const targetWs = clients.get(targetUserId);
+  if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+    targetWs.send(JSON.stringify({
+      type: 'reaction',
+      messageId: messageId,
+      userId: userId,
+      reaction: reaction
+    }));
+  }
+};
 
 const broadcastNewUser = (userData) => {
   const message = JSON.stringify({
@@ -201,46 +313,12 @@ const broadcastOnlineUsers = () => {
   });
 };
 
-const sendMessageToUser = (to, messageData) => {
-  const recipientWs = clients.get(to);
-  if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
-    recipientWs.send(JSON.stringify({
-      type: 'message',
-      ...messageData
-    }));
-    return true;
-  }
-  return false;
-};
-
-const notifyMessageUpdate = (to, type, data) => {
-  const recipientWs = clients.get(to);
-  if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
-    recipientWs.send(JSON.stringify({
-      type: type,
-      ...data
-    }));
-    return true;
-  }
-  return false;
-};
-
-const broadcastReaction = (messageId, userId, reaction, targetUserId) => {
-  const targetWs = clients.get(targetUserId);
-  if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-    targetWs.send(JSON.stringify({
-      type: 'reaction',
-      messageId: messageId,
-      userId: userId,
-      reaction: reaction
-    }));
-  }
-};
-
 module.exports = {
   setupWebSocket,
   clients,
+  rooms,
   sendMessageToUser,
+  sendMessageToRoom,
   notifyMessageUpdate,
   broadcastReaction,
   broadcastStatus,
