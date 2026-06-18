@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import EmojiPicker from '../Common/EmojiPicker';
 import { uploadAPI } from '../../api';
 import { MAX_FILE_SIZE, ALLOWED_FILE_TYPES } from '../../utils/constants';
@@ -15,19 +15,73 @@ const MessageInput = ({
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+  
+  const typingTimerRef = useRef(null);
+  const isTypingRef = useRef(false);
 
   const handleSend = () => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
     onSend(trimmed);
     setText('');
+    if (isTypingRef.current && onTyping) {
+      onTyping(false);
+      isTypingRef.current = false;
+    }
+  };
+
+  const handleTypingDebounced = useCallback(() => {
+    if (!onTyping || disabled) return;
+
+    if (!isTypingRef.current) {
+      onTyping(true);
+      isTypingRef.current = true;
+    }
+
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+    }
+
+    typingTimerRef.current = setTimeout(() => {
+      if (onTyping) {
+        onTyping(false);
+        isTypingRef.current = false;
+      }
+      typingTimerRef.current = null;
+    }, 2000);
+  }, [onTyping, disabled]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+      }
+      if (isTypingRef.current && onTyping) {
+        onTyping(false);
+      }
+    };
+  }, [onTyping]);
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setText(value);
+    handleTypingDebounced();
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      setText(prev => prev + '\n');
+    }
   };
 
   const handleFileSelect = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
-    console.log('📁 Выбран файл:', file.name, file.type, file.size);
 
     if (file.size > MAX_FILE_SIZE) {
       alert(`Файл слишком большой! Максимум ${MAX_FILE_SIZE / 1024 / 1024}MB`);
@@ -42,34 +96,25 @@ const MessageInput = ({
 
     setUploading(true);
     try {
-      console.log('📤 Загрузка файла на сервер...');
       const result = await uploadAPI.upload(file);
-      console.log('✅ Файл загружен:', result);
-
-      const fullUrl = `http://localhost:3002${result.url}`;
-      
-      // 🔥 ПРАВИЛЬНОЕ ФОРМАТИРОВАНИЕ
       let fileText = '';
       if (result.type === 'image') {
-        fileText = `📷 Изображение: ${result.name} ${fullUrl}`;
+        fileText = `📷 Изображение: ${result.url}`;
       } else if (result.type === 'audio') {
-        fileText = `🎵 Аудио: ${result.name} ${fullUrl}`;
+        fileText = `🎵 Аудио: ${result.name} ${result.url}`;
       } else if (result.type === 'video') {
-        fileText = `🎬 Видео: ${result.name} ${fullUrl}`;
+        fileText = `🎬 Видео: ${result.name} ${result.url}`;
       } else {
-        fileText = `📎 Файл: ${result.name} ${fullUrl}`;
+        fileText = `📎 Файл: ${result.name} ${result.url}`;
       }
-
-      console.log('📨 Отправка файлового сообщения:', fileText);
-
+      
       if (onFileSend) {
         onFileSend(fileText);
       } else {
         onSend(fileText);
       }
-      
     } catch (error) {
-      console.error('❌ Upload error:', error);
+      console.error('Upload error:', error);
       alert('Ошибка загрузки файла');
     } finally {
       setUploading(false);
@@ -87,18 +132,8 @@ const MessageInput = ({
           type="text"
           placeholder={placeholder}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-            if (e.key === 'Enter' && e.ctrlKey) {
-              e.preventDefault();
-              setText(prev => prev + '\n');
-            }
-          }}
-          onKeyUp={onTyping}
+          onChange={handleInputChange}
+          onKeyPress={handleKeyPress}
           disabled={disabled || uploading}
         />
         <button 
@@ -115,6 +150,7 @@ const MessageInput = ({
           onSelect={(emoji) => {
             setText(prev => prev + emoji);
             inputRef.current?.focus();
+            handleTypingDebounced();
           }} 
           onClose={() => setShowEmojiPicker(false)} 
         />

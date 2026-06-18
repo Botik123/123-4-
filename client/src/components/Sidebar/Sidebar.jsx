@@ -14,21 +14,28 @@ const Sidebar = ({
   onLogout
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMobileOpen, setIsMobileOpen] = useState(true);
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${isMobileOpen ? 'open' : 'closed'}`}>
       <UserProfile 
         user={user}
         isConnecting={isConnecting}
         onToggleTheme={onToggleTheme}
         isDarkTheme={isDarkTheme}
         onLogout={onLogout}
+        onMobileClose={() => setIsMobileOpen(false)}
       />
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
       <ChatList 
         users={users}
         selectedUserId={selectedUser?.id}
-        onSelectUser={onSelectUser}
+        onSelectUser={(user) => {
+          onSelectUser(user);
+          if (window.innerWidth <= 768) {
+            setIsMobileOpen(false);
+          }
+        }}
         searchQuery={searchQuery}
       />
     </div>

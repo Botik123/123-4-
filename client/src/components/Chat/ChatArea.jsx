@@ -21,18 +21,21 @@ const ChatArea = ({
   onFileSend,
   onTyping,
   onSetReplyTo,
-  isConnecting
+  isConnecting,
+  onBack,
+  isMobileOpen
 }) => {
   if (!selectedUser) {
     return <EmptyChat />;
   }
 
   return (
-    <div className="chat-area">
+    <div className={`chat-area ${isMobileOpen ? 'mobile-open' : ''}`}>
       <ChatHeader 
         user={selectedUser}
         typing={typing}
         isOnline={selectedUser.online}
+        onBack={onBack}
       />
       
       <Messages 

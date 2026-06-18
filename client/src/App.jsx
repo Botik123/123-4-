@@ -15,6 +15,7 @@ function App() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
   const [currentChatId, setCurrentChatId] = useState(null);
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   const isConnectingRef = useRef(false);
 
   const { user, loading: authLoading, login, register, logout } = useAuth();
@@ -40,7 +41,8 @@ function App() {
     updateMessage,
     removeMessage,
     loadHistory,
-    markAsRead
+    markAsRead,
+    pendingMessages
   } = useMessages(user?.id, selectedUser?.id);
   
   const {
@@ -126,6 +128,11 @@ function App() {
       setCurrentChatId(chatId);
       joinRoom(chatId);
       loadHistory(user.id, selectedUser.id);
+      
+      // На мобилках открываем чат
+      if (window.innerWidth <= 768) {
+        setIsMobileChatOpen(true);
+      }
     }
     
     return () => {
@@ -153,7 +160,23 @@ function App() {
     }
   }, [messages, users, selectedUser, setUsers]);
 
-  // Обработчики
+  // ============ ОБРАБОТЧИКИ ============
+
+  // Обработчик выбора пользователя (с адаптивом)
+  const handleSelectUser = (user) => {
+    setSelectedUser(user);
+    if (window.innerWidth <= 768) {
+      setIsMobileChatOpen(true);
+    }
+  };
+
+  // Обработчик кнопки "Назад" на мобилках
+  const handleBack = () => {
+    if (window.innerWidth <= 768) {
+      setIsMobileChatOpen(false);
+    }
+  };
+
   const handleLogin = async (username, password) => {
     const result = await login(username, password);
     if (!result.success) {
@@ -208,8 +231,13 @@ function App() {
     addReaction(messageId, reaction, selectedUser.id);
   };
 
-  const handleTyping = () => {
-    if (selectedUser) {
+  // 🔥 Обработчик статуса печати с debounce
+  const handleTyping = (isTyping) => {
+    if (!selectedUser) return;
+    if (isTyping) {
+      sendTyping(selectedUser.id);
+    } else {
+      // Отправляем событие "перестал печатать"
       sendTyping(selectedUser.id);
     }
   };
@@ -218,6 +246,8 @@ function App() {
     setIsDarkTheme(!isDarkTheme);
     document.documentElement.setAttribute('data-theme', !isDarkTheme ? 'dark' : 'light');
   };
+
+  // ============ РЕНДЕР ============
 
   if (!user) {
     return (
@@ -235,7 +265,7 @@ function App() {
         user={user}
         users={users}
         selectedUser={selectedUser}
-        onSelectUser={setSelectedUser}
+        onSelectUser={handleSelectUser}
         isConnecting={isConnecting}
         onToggleTheme={toggleTheme}
         isDarkTheme={isDarkTheme}
@@ -258,6 +288,8 @@ function App() {
         onTyping={handleTyping}
         onSetReplyTo={setReplyTo}
         isConnecting={isConnecting}
+        onBack={handleBack}
+        isMobileOpen={isMobileChatOpen}
       />
     </div>
   );
