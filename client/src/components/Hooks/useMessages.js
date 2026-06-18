@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react';
 import { messagesAPI } from '../../api';
 import { getCleanText } from '../../utils/helpers';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useMessages = (userId, otherUserId) => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pendingMessages, setPendingMessages] = useState({});
 
   const loadHistory = useCallback(async (userId, otherUserId) => {
     if (!userId || !otherUserId) return;
@@ -20,14 +22,16 @@ export const useMessages = (userId, otherUserId) => {
     }
   }, []);
 
-  const sendMessage = useCallback(async (to, text, replyTo) => {
+  const sendMessage = useCallback(async (to, text, replyTo, chatId) => {
     const recipientId = typeof to === 'string' ? to : to?.id || to;
     if (!recipientId) {
       console.error('sendMessage: invalid recipient', to);
       return;
     }
 
-    const tempId = Date.now();
+    // Генерируем уникальный clientId
+    const clientId = uuidv4();
+    const tempId = `temp-${clientId}`;
     
     try {
       const newMsg = {
@@ -38,21 +42,49 @@ export const useMessages = (userId, otherUserId) => {
         timestamp: Date.now(),
         read: 0,
         reply_to: replyTo || null,
-        reactions: {}
+        reactions: {},
+        clientId: clientId,
+        pending: true
       };
       
       setMessages(prev => [...prev, newMsg]);
+      setPendingMessages(prev => ({ ...prev, [clientId]: true }));
+
+      const result = await messagesAPI.send(recipientId, text, replyTo, chatId, clientId);
       
-      const result = await messagesAPI.send(recipientId, text, replyTo);
+      // Обработка дубликатов
+      if (result.alreadyProcessed) {
+        console.log('⚠️ Сообщение уже обработано, удаляем дубликат');
+        setMessages(prev => prev.filter(msg => msg.id !== tempId));
+        setPendingMessages(prev => {
+          const newState = { ...prev };
+          delete newState[clientId];
+          return newState;
+        });
+        return;
+      }
       
+      // Обновляем ID сообщения
       setMessages(prev => prev.map(msg => 
-        msg.id === tempId ? { ...msg, id: result.id } : msg
+        msg.id === tempId ? { ...msg, id: result.id, pending: false } : msg
       ));
+      
+      setPendingMessages(prev => {
+        const newState = { ...prev };
+        delete newState[clientId];
+        return newState;
+      });
       
       return result;
     } catch (error) {
       console.error('Error sending message:', error);
+      // Удаляем временное сообщение при ошибке
       setMessages(prev => prev.filter(msg => msg.id !== tempId));
+      setPendingMessages(prev => {
+        const newState = { ...prev };
+        delete newState[clientId];
+        return newState;
+      });
       alert('Ошибка отправки сообщения');
     }
   }, [userId]);
@@ -99,7 +131,6 @@ export const useMessages = (userId, otherUserId) => {
     }
   }, []);
 
-  // ИСПРАВЛЕННАЯ ПЕРЕСЫЛКА
   const forwardMessage = useCallback(async (to, messageId) => {
     const recipientId = typeof to === 'string' ? to : to?.id || to;
     if (!recipientId) {
@@ -108,18 +139,15 @@ export const useMessages = (userId, otherUserId) => {
     }
 
     try {
-      // Находим оригинальное сообщение
       const originalMsg = messages.find(m => m.id === messageId);
       if (!originalMsg) {
         alert('Сообщение не найдено');
         return;
       }
 
-      // Получаем чистый текст без ответов
       const cleanText = getCleanText(originalMsg.text);
       const forwardText = `📎 Переслано: ${cleanText || originalMsg.text}`;
 
-      // Отправляем как новое сообщение
       const result = await sendMessage(recipientId, forwardText);
       return result;
     } catch (error) {
@@ -128,7 +156,6 @@ export const useMessages = (userId, otherUserId) => {
     }
   }, [messages, sendMessage]);
 
-  // ИСПРАВЛЕННАЯ РЕАКЦИЯ (с синхронизацией)
   const addReaction = useCallback(async (messageId, reaction, to) => {
     const recipientId = typeof to === 'string' ? to : to?.id || to;
     if (!recipientId) {
@@ -136,11 +163,9 @@ export const useMessages = (userId, otherUserId) => {
       return;
     }
 
-    // Локальное обновление (оптимистичное)
     setMessages(prev => prev.map(msg => {
       if (msg.id === messageId) {
         const reactions = msg.reactions || {};
-        // Toggle reaction
         if (reactions[userId] === reaction) {
           delete reactions[userId];
         } else {
@@ -155,7 +180,6 @@ export const useMessages = (userId, otherUserId) => {
       await messagesAPI.addReaction(messageId, reaction, recipientId);
     } catch (error) {
       console.error('Error adding reaction:', error);
-      // Откатываем изменения при ошибке
       setMessages(prev => prev.map(msg => {
         if (msg.id === messageId) {
           const reactions = msg.reactions || {};
@@ -209,6 +233,7 @@ export const useMessages = (userId, otherUserId) => {
     addMessage,
     updateMessage,
     removeMessage,
-    markAsRead
+    markAsRead,
+    pendingMessages
   };
 };

@@ -1,13 +1,42 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
 const db = require('../db/queries');
 const { authMiddleware } = require('../middleware/auth');
 const { sanitizeBody } = require('../middleware/sanitize');
 const { sendMessageToUser, sendMessageToRoom, notifyMessageUpdate, broadcastReaction } = require('../socket');
+const redis = require('../redis');
 
 const router = express.Router();
 
 router.use(authMiddleware);
+
+// ============ ПРОВЕРКА ДУБЛИКАТОВ ============
+
+const isMessageDuplicate = async (clientId) => {
+  if (!clientId) return false;
+  
+  try {
+    const exists = await redis.get(`msg:${clientId}`);
+    return exists !== null;
+  } catch (error) {
+    console.error('Redis duplicate check error:', error);
+    return false;
+  }
+};
+
+const markMessageAsProcessed = async (clientId) => {
+  if (!clientId) return;
+  
+  try {
+    await redis.set(`msg:${clientId}`, '1', { EX: 5 });
+  } catch (error) {
+    console.error('Redis mark error:', error);
+  }
+};
+
+// ============ РОУТЫ ============
 
 // Получить историю сообщений
 router.get('/:userId/:otherUserId', async (req, res) => {
@@ -29,7 +58,7 @@ router.get('/:userId/:otherUserId', async (req, res) => {
 
 // Отправить сообщение
 router.post('/', sanitizeBody, async (req, res) => {
-  const { to, text, reply_to, chatId } = req.body;
+  const { to, text, reply_to, chatId, clientId } = req.body;
   const from = req.user.id;
 
   if (!to) {
@@ -38,6 +67,19 @@ router.post('/', sanitizeBody, async (req, res) => {
 
   if (!text || text.trim() === '') {
     return res.status(400).json({ error: 'Сообщение не может быть пустым' });
+  }
+
+  // Проверка дубликата
+  if (clientId) {
+    const isDuplicate = await isMessageDuplicate(clientId);
+    if (isDuplicate) {
+      console.log(`⚠️ Дубликат сообщения ${clientId} отклонён`);
+      return res.status(409).json({ 
+        error: 'Duplicate message', 
+        clientId,
+        alreadyProcessed: true 
+      });
+    }
   }
 
   try {
@@ -51,8 +93,13 @@ router.post('/', sanitizeBody, async (req, res) => {
       text.trim(),
       timestamp,
       reply_to || null,
-      null
+      null,
+      clientId || null
     );
+
+    if (clientId) {
+      await markMessageAsProcessed(clientId);
+    }
 
     const messageData = {
       id: messageId,
@@ -61,7 +108,8 @@ router.post('/', sanitizeBody, async (req, res) => {
       text: text.trim(),
       timestamp: timestamp,
       read: 0,
-      reply_to: reply_to || null
+      reply_to: reply_to || null,
+      clientId: clientId || null
     };
 
     let delivered = false;
@@ -126,7 +174,7 @@ router.put('/:messageId', sanitizeBody, async (req, res) => {
   }
 });
 
-// Удалить сообщение
+// Удалить сообщение (с удалением файла)
 router.delete('/:messageId', async (req, res) => {
   const { to } = req.body;
   const userId = req.user.id;
@@ -136,6 +184,7 @@ router.delete('/:messageId', async (req, res) => {
   }
 
   try {
+    // Получаем сообщение перед удалением
     const message = await db.getMessageById(req.params.messageId);
     if (!message) {
       return res.status(404).json({ error: 'Сообщение не найдено' });
@@ -145,6 +194,29 @@ router.delete('/:messageId', async (req, res) => {
       return res.status(403).json({ error: 'Нельзя удалять чужое сообщение' });
     }
 
+    // Удаляем файл, если он есть
+    let fileDeleted = false;
+    if (message.file_path) {
+      const filePath = path.join(__dirname, '../../', message.file_path);
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`🗑️ Файл удалён: ${filePath}`);
+          fileDeleted = true;
+          
+          // Удаляем миниатюру если есть
+          const thumbPath = filePath.replace(/(\.[^.]+)$/, '_thumb$1');
+          if (fs.existsSync(thumbPath)) {
+            fs.unlinkSync(thumbPath);
+            console.log(`🗑️ Миниатюра удалена: ${thumbPath}`);
+          }
+        }
+      } catch (fileError) {
+        console.error('❌ Ошибка удаления файла:', fileError);
+      }
+    }
+
+    // Удаляем сообщение из БД
     const result = await db.deleteMessage(req.params.messageId);
 
     if (result.changes === 0) {
@@ -155,7 +227,7 @@ router.delete('/:messageId', async (req, res) => {
       messageId: req.params.messageId
     });
 
-    res.json({ success: true });
+    res.json({ success: true, fileDeleted });
 
   } catch (error) {
     console.error('Error deleting message:', error);
@@ -191,7 +263,8 @@ router.post('/forward', sanitizeBody, async (req, res) => {
       forwardedText,
       timestamp,
       null,
-      originalMessage.from_user
+      originalMessage.from_user,
+      null
     );
 
     const delivered = sendMessageToUser(to, {
@@ -254,6 +327,55 @@ router.post('/read', async (req, res) => {
   } catch (error) {
     console.error('Error marking as read:', error);
     res.status(500).json({ error: 'Ошибка' });
+  }
+});
+
+// Очистка осиротевших файлов (админский роут)
+router.post('/cleanup-orphan-files', async (req, res) => {
+  const userId = req.user.id;
+  
+  // TODO: Добавить проверку isAdmin
+  // if (!isAdmin) return res.status(403).json({ error: 'Доступ запрещён' });
+  
+  try {
+    const uploadDir = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadDir)) {
+      return res.json({ success: true, deletedCount: 0, message: 'Папка uploads не найдена' });
+    }
+    
+    const files = fs.readdirSync(uploadDir);
+    
+    // Получаем все файлы из БД
+    const dbFiles = await db.getAllFilePaths();
+    const dbFileSet = new Set(dbFiles.map(f => path.basename(f.file_path)));
+    
+    let deletedCount = 0;
+    for (const file of files) {
+      // Пропускаем миниатюры (они удаляются вместе с основным файлом)
+      if (file.startsWith('thumb_')) {
+        const originalFile = file.replace('thumb_', '');
+        if (!dbFileSet.has(originalFile)) {
+          fs.unlinkSync(path.join(uploadDir, file));
+          deletedCount++;
+        }
+        continue;
+      }
+      
+      if (!dbFileSet.has(file)) {
+        fs.unlinkSync(path.join(uploadDir, file));
+        deletedCount++;
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      deletedCount,
+      message: `Удалено ${deletedCount} осиротевших файлов`
+    });
+    
+  } catch (error) {
+    console.error('Ошибка очистки файлов:', error);
+    res.status(500).json({ error: 'Ошибка очистки файлов' });
   }
 });
 

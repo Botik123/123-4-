@@ -3,7 +3,6 @@ const config = require('../config');
 
 let client = null;
 
-// 🔥 ФИКС: Обработка ошибок подключения
 try {
   client = redis.createClient({
     url: config.redisUrl,
@@ -40,7 +39,6 @@ try {
   client = null;
 }
 
-// 🔥 ФИКС: Безопасные обёртки для методов
 const safeRedis = {
   get: async (key) => {
     if (!client) return null;

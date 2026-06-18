@@ -119,7 +119,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // 🔥 НОВОЕ: Подписка на комнату при выборе пользователя
+  // Подписка на комнату при выборе пользователя
   useEffect(() => {
     if (selectedUser && user) {
       const chatId = [user.id, selectedUser.id].sort().join('_');

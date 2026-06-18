@@ -3,7 +3,7 @@ const path = require('path');
 
 const db = new sqlite3.Database(path.join(__dirname, '../../messenger.db'));
 
-// 🔥 ФИКС: Включаем WAL режим для избежания SQLITE_BUSY
+// Включаем WAL режим для избежания SQLITE_BUSY
 db.run('PRAGMA journal_mode = WAL;');
 db.run('PRAGMA synchronous = NORMAL;');
 
@@ -19,7 +19,7 @@ db.serialize(() => {
     )
   `);
 
-  // Таблица сообщений
+  // Таблица сообщений (с client_id и file_path)
   db.run(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -32,14 +32,17 @@ db.serialize(() => {
       edited_at INTEGER,
       reply_to TEXT,
       forwarded_from TEXT,
-      deleted INTEGER DEFAULT 0
+      deleted INTEGER DEFAULT 0,
+      client_id TEXT,
+      file_path TEXT
     )
   `);
 
-  // 🔥 ФИКС: Индексы для ускорения запросов
+  // Индексы для ускорения запросов
   db.run(`CREATE INDEX IF NOT EXISTS idx_messages_from_user ON messages(from_user)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_messages_to_user ON messages(to_user)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_client_id ON messages(client_id)`);
 
   // Таблица реакций
   db.run(`
@@ -55,7 +58,7 @@ db.serialize(() => {
     )
   `);
 
-  console.log('✅ SQLite база данных готова (WAL режим включён)');
+  console.log('✅ SQLite база данных готова (WAL режим + client_id + file_path)');
 });
 
 module.exports = db;

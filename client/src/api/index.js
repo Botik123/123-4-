@@ -50,11 +50,13 @@ export const messagesAPI = {
   getHistory: (userId, otherUserId) => 
     request(`/messages/${userId}/${otherUserId}`),
   
-  send: (to, text, replyTo) =>
-    request('/messages', {
-      method: 'POST',
-      body: JSON.stringify({ to, text, reply_to: replyTo })
-    }),
+  send: (to, text, replyTo, chatId, clientId) => {
+  console.log('📤 API send:', { to, text, replyTo, chatId, clientId });
+  return request('/messages', {
+    method: 'POST',
+    body: JSON.stringify({ to, text, reply_to: replyTo, chatId, clientId })
+  });
+},
   
   edit: (messageId, text, to) =>
     request(`/messages/${messageId}`, {

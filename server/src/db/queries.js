@@ -1,6 +1,5 @@
 const db = require('./index');
 
-// Все запросы используют плейсхолдеры для защиты от SQL-инъекций
 module.exports = {
   // ============ ПОЛЬЗОВАТЕЛИ ============
   
@@ -46,12 +45,12 @@ module.exports = {
 
   // ============ СООБЩЕНИЯ ============
   
-  createMessage: (id, from, to, text, timestamp, replyTo, forwardedFrom) => {
+  createMessage: (id, from, to, text, timestamp, replyTo, forwardedFrom, clientId) => {
     return new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO messages (id, from_user, to_user, text, timestamp, read, reply_to, forwarded_from) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, from, to, text, timestamp, 0, replyTo || null, forwardedFrom || null],
+        `INSERT INTO messages (id, from_user, to_user, text, timestamp, read, reply_to, forwarded_from, client_id) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, from, to, text, timestamp, 0, replyTo || null, forwardedFrom || null, clientId || null],
         function(err) {
           if (err) reject(err);
           resolve({ id, from, to, text, timestamp });
@@ -65,6 +64,7 @@ module.exports = {
       db.all(
         `SELECT * FROM messages 
          WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
+         AND deleted = 0
          ORDER BY timestamp ASC LIMIT ?`,
         [userId1, userId2, userId2, userId1, limit],
         (err, rows) => {
@@ -91,7 +91,7 @@ module.exports = {
   deleteMessage: (id) => {
     return new Promise((resolve, reject) => {
       db.run(
-        'UPDATE messages SET text = "🗑️ Сообщение удалено", deleted = 1 WHERE id = ?',
+        'UPDATE messages SET deleted = 1, text = "🗑️ Сообщение удалено" WHERE id = ?',
         [id],
         function(err) {
           if (err) reject(err);
@@ -107,6 +107,37 @@ module.exports = {
         if (err) reject(err);
         resolve(row);
       });
+    });
+  },
+
+  getMessageFile: (id) => {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT file_path FROM messages WHERE id = ? AND file_path IS NOT NULL', [id], (err, row) => {
+        if (err) reject(err);
+        resolve(row);
+      });
+    });
+  },
+
+  getAllFilePaths: () => {
+    return new Promise((resolve, reject) => {
+      db.all('SELECT file_path FROM messages WHERE file_path IS NOT NULL AND deleted = 0', (err, rows) => {
+        if (err) reject(err);
+        resolve(rows || []);
+      });
+    });
+  },
+
+  updateMessageFile: (id, filePath) => {
+    return new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE messages SET file_path = ? WHERE id = ?',
+        [filePath, id],
+        function(err) {
+          if (err) reject(err);
+          resolve({ changes: this.changes });
+        }
+      );
     });
   },
 
