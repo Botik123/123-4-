@@ -33,8 +33,7 @@ function App() {
     loading: usersLoading, 
     fetchUsers,
     addUser,
-    updateUserStatus,
-    setUsers
+    updateUserStatus
   } = useUsers();
   
   // === MESSAGES HOOK ===
@@ -105,13 +104,9 @@ function App() {
     onOnlineUsers: (onlineUserIds) => {
       const onlineSet = new Set(onlineUserIds);
       
-      setUsers(prev => {
-        if (!Array.isArray(prev) || prev.length === 0) return [];
-        return prev.map(u => ({
-          ...u,
-          online: onlineSet.has(u.id),
-          last_seen: onlineSet.has(u.id) ? Date.now() : u.last_seen
-        }));
+      // Обновляем статусы всех пользователей
+      users.forEach(u => {
+        updateUserStatus(u.id, onlineSet.has(u.id), onlineSet.has(u.id) ? Date.now() : u.last_seen);
       });
       
       if (selectedUser) {
@@ -168,12 +163,11 @@ function App() {
         getMessages: () => messages,
         getUsers: () => users,
         getSelectedUser: () => selectedUser,
-        API_URL: 'http://localhost:3002',
-        setUsers: setUsers
+        API_URL: 'http://localhost:3002'
       };
       console.log('✅ Дебаг режим активирован! Используй window.__debug');
     }
-  }, [messages, users, selectedUser, setUsers]);
+  }, [messages, users, selectedUser]);
 
   // ==========================================
   // === ОБРАБОТЧИКИ СОБЫТИЙ ===
