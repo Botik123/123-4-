@@ -39,10 +39,12 @@ const markMessageAsProcessed = async (clientId) => {
 // ============ РОУТЫ ============
 
 // Получить историю сообщений
-router.get('/:userId/:otherUserId', authMiddleware, async (req, res) => {
+router.get('/:userId/:otherUserId', async (req, res) => {
   try {
     const userId = req.user.id;
     const otherUserId = req.params.otherUserId;
+    
+    console.log(`📥 Запрос истории: userId=${userId}, otherUserId=${otherUserId}`);
     
     // Получаем сообщения между текущим пользователем и собеседником
     const messages = await db.getMessagesBetweenUsers(userId, otherUserId);

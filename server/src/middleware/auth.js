@@ -37,7 +37,10 @@ const verifyToken = (token) => {
 const authMiddleware = (req, res, next) => {
   // Проверка наличия заголовка
   const authHeader = req.headers.authorization;
+  console.log(`🔐 Auth check: ${req.method} ${req.path}, Auth header: ${authHeader ? 'present' : 'missing'}`);
+  
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.warn('⚠️ Нет токена или неверный формат');
     return res.status(401).json({ error: 'Не авторизован' });
   }
 
@@ -46,6 +49,7 @@ const authMiddleware = (req, res, next) => {
   const decoded = verifyToken(token);
 
   if (!decoded) {
+    console.warn('⚠️ Недействительный токен');
     return res.status(401).json({ error: 'Недействительный токен' });
   }
 
@@ -54,6 +58,7 @@ const authMiddleware = (req, res, next) => {
     id: decoded.userId
   };
   
+  console.log(`✅ Auth success: userId=${decoded.userId}`);
   next();
 };
 
