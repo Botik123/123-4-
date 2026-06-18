@@ -195,16 +195,21 @@ function App() {
 
   // Применяем pending статусы после загрузки users
   useEffect(() => {
+    console.log(`🔄 useEffect users: length=${users?.length || 0}, pending.size=${pendingStatuses.current.size}`);
+    
     if (users && users.length > 0 && pendingStatuses.current.size > 0) {
       console.log(`🔄 users загружен (${users.length}), применяем ${pendingStatuses.current.size} pending статусов`);
       
       setUsers(prev => {
-        if (!prev || prev.length === 0) return prev;
+        if (!prev || prev.length === 0) {
+          console.warn('⚠️ prev users is empty');
+          return prev;
+        }
         
         const updated = prev.map(u => {
           const pending = pendingStatuses.current.get(u.id);
           if (pending && u.id !== user?.id) {
-            console.log(`  📍 ${u.username}: ${u.online} -> ${pending.online}`);
+            console.log(`  📍 ${u.username} (${u.id}): ${u.online} -> ${pending.online}`);
             return {
               ...u,
               online: pending.online,
@@ -214,10 +219,12 @@ function App() {
           return u;
         });
         
+        console.log(`  ✅ Обновлён массив users (${updated.length} элементов)`);
         pendingStatuses.current.clear();
-        console.log(`  ✅ Статусы применены`);
         return updated;
       });
+    } else {
+      console.warn(`⚠️ useEffect: users.length=${users?.length}, pending.size=${pendingStatuses.current.size} - пропускаем`);
     }
   }, [users, user?.id]);
 
