@@ -48,6 +48,7 @@ router.get('/:userId/:otherUserId', async (req, res) => {
     
     // Получаем сообщения между текущим пользователем и собеседником
     const messages = await db.getMessagesBetweenUsers(userId, otherUserId);
+    console.log(`📤 Отправка ${messages.length} сообщений клиенту`);
     res.json(messages);
   } catch (error) {
     console.error('Error loading messages:', error);

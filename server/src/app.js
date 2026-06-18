@@ -20,7 +20,17 @@ const app = express();
 // === MIDDLEWARE ===
 
 // Разрешаем CORS для всех origin (в продакшене ограничить!)
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Логирование всех запросов для отладки
+app.use((req, res, next) => {
+  console.log(`📋 ${req.method} ${req.path}`);
+  next();
+});
 
 // Парсинг JSON с увеличенным лимитом для файловых сообщений
 app.use(express.json({ limit: '50mb' }));
