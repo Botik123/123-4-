@@ -239,9 +239,7 @@ function App() {
   // Удаление сообщения (подтверждение в компоненте Message)
   const handleDeleteMessage = (messageId) => {
     if (!selectedUser) return;
-    if (window.confirm('Удалить сообщение?')) {
-      deleteMessage(messageId, selectedUser.id);
-    }
+    deleteMessage(messageId, selectedUser.id);
   };
 
   // Добавление реакции

@@ -135,12 +135,13 @@ const Message = memo(({
   };
 
   const handleDelete = () => {
-    if (onDelete) {
+    if (window.confirm('Удалить сообщение?') && onDelete) {
       onDelete(message.id);
     }
   };
 
-  const handleReaction = (reaction) => {
+  const handleReaction = (e, reaction) => {
+    e.stopPropagation(); // Предотвращаем всплытие
     if (onReaction) {
       onReaction(message.id, reaction);
     }
@@ -172,7 +173,7 @@ const Message = memo(({
         {!isDeleted && showReactionPicker && (
           <div className="reactions-picker">
             {REACTIONS_LIST.map(r => (
-              <button key={r} onClick={() => handleReaction(r)}>
+              <button key={r} onClick={(e) => handleReaction(e, r)}>
                 {r}
               </button>
             ))}

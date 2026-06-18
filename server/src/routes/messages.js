@@ -175,7 +175,7 @@ router.put('/:messageId', sanitizeBody, async (req, res) => {
 });
 
 // Удалить сообщение (с удалением файла)
-router.delete('/:messageId', async (req, res) => {
+router.delete('/:messageId', authMiddleware, async (req, res) => {
   const { to } = req.body;
   const userId = req.user.id;
 
@@ -331,7 +331,7 @@ router.post('/read', authMiddleware, async (req, res) => {
 });
 
 // Очистка осиротевших файлов (админский роут)
-router.post('/cleanup-orphan-files', async (req, res) => {
+router.post('/cleanup-orphan-files', authMiddleware, async (req, res) => {
   const userId = req.user.id;
   
   // TODO: Добавить проверку isAdmin

@@ -205,7 +205,8 @@ const setupWebSocket = (server) => {
     const pingInterval = setInterval(() => {
       // Проверяем только другие подключения, не текущее
       clients.forEach((client, userId) => {
-        if (client !== ws || client.readyState !== WebSocket.OPEN) {
+        // Пропускаем текущее соединение и проверяем только закрытые
+        if (client !== ws && client.readyState !== WebSocket.OPEN) {
           clients.delete(userId);
           broadcastStatus(userId, false);
           broadcastOnlineUsers();

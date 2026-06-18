@@ -53,11 +53,15 @@ const MessageInput = ({
 
   useEffect(() => {
     return () => {
+      // Очистка таймера при размонтировании
       if (typingTimerRef.current) {
         clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
       }
+      // Сброс флага набора текста
       if (isTypingRef.current && onTyping) {
         onTyping(false);
+        isTypingRef.current = false;
       }
     };
   }, [onTyping]);

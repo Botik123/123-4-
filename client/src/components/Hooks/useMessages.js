@@ -199,16 +199,18 @@ export const useMessages = (userId, otherUserId) => {
       return;
     }
 
-    // Оптимистичное обновление UI
+    // Оптимистичное обновление UI (с созданием нового объекта reactions)
     setMessages(prev => prev.map(msg => {
       if (msg.id === messageId) {
-        const reactions = msg.reactions || {};
-        if (reactions[userId] === reaction) {
-          delete reactions[userId];
+        const oldReactions = msg.reactions || {};
+        // Создаём новый объект вместо мутации
+        const newReactions = { ...oldReactions };
+        if (newReactions[userId] === reaction) {
+          delete newReactions[userId];
         } else {
-          reactions[userId] = reaction;
+          newReactions[userId] = reaction;
         }
-        return { ...msg, reactions };
+        return { ...msg, reactions: newReactions };
       }
       return msg;
     }));
@@ -220,9 +222,10 @@ export const useMessages = (userId, otherUserId) => {
       // Откат при ошибке
       setMessages(prev => prev.map(msg => {
         if (msg.id === messageId) {
-          const reactions = msg.reactions || {};
-          delete reactions[userId];
-          return { ...msg, reactions };
+          const oldReactions = msg.reactions || {};
+          const newReactions = { ...oldReactions };
+          delete newReactions[userId];
+          return { ...msg, reactions: newReactions };
         }
         return msg;
       }));

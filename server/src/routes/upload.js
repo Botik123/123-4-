@@ -39,11 +39,19 @@ const upload = multer({
       'text/plain'
     ];
     
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Неподдерживаемый тип файла'), false);
+    // Проверяем MIME type
+    if (!allowedMimes.includes(file.mimetype)) {
+      return cb(new Error('Неподдерживаемый тип файла'), false);
     }
+    
+    // Дополнительная проверка расширения файла
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp3', '.ogg', '.wav', '.mp4', '.webm', '.pdf', '.doc', '.docx', '.txt'];
+    if (!allowedExts.includes(ext)) {
+      return cb(new Error('Неподдерживаемое расширение файла'), false);
+    }
+    
+    cb(null, true);
   }
 });
 

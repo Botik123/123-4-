@@ -15,6 +15,8 @@ const getToken = () => localStorage.getItem('token');
  * Базовый запрос с авторизацией
  * @param {string} endpoint - URL endpoint
  * @param {object} options - Fetch options
+ * @returns {Promise<any>} Данные ответа
+ * @throws {Error} Ошибка запроса
  */
 const request = async (endpoint, options = {}) => {
   const token = getToken();
@@ -28,12 +30,20 @@ const request = async (endpoint, options = {}) => {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers
-  });
+  let response;
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers
+    });
+  } catch (networkError) {
+    console.error('Network error:', networkError.message);
+    throw new Error('Ошибка сети. Проверьте подключение к серверу.');
+  }
 
-  const data = await response.json();
+  // Обработка пустого ответа
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
   
   if (!response.ok) {
     throw new Error(data.error || 'Ошибка запроса');
