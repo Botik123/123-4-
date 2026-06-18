@@ -78,17 +78,9 @@ function App() {
       }
     },
     onNewUser: (data) => {
-      console.log('🆕 Новый пользователь:', data.user);
       addUser(data.user);
     },
     onOnlineUsers: (onlineUserIds) => {
-      console.log('📡 Получен список онлайн:', onlineUserIds);
-      
-      if (typeof setUsers !== 'function') {
-        console.error('❌ setUsers не является функцией!');
-        return;
-      }
-      
       const onlineSet = new Set(onlineUserIds);
       
       setUsers(prev => {
@@ -108,7 +100,7 @@ function App() {
     }
   });
 
-  // ДЕБАГ РЕЖИМ
+  // Дебаг режим
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.__debug = {

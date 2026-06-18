@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
 const { authMiddleware } = require('../middleware/auth');
+const { sanitizeFilename } = require('../middleware/sanitize');
 const config = require('../config');
 
 const router = express.Router();
@@ -14,6 +15,7 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// 🔥 ФИКС: Хранилище с санитизацией имени
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -22,20 +24,44 @@ const storage = multer.diskStorage({
   }
 });
 
+// 🔥 ФИКС: Полная конфигурация Multer
 const upload = multer({
   storage,
-  limits: { fileSize: config.maxFileSize }
+  limits: { 
+    fileSize: config.maxFileSize || 50 * 1024 * 1024
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'audio/mpeg', 'audio/ogg', 'audio/wav',
+      'video/mp4', 'video/webm',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain'
+    ];
+    
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Неподдерживаемый тип файла'), false);
+    }
+  }
 });
 
 router.use(authMiddleware);
 
+// 🔥 ФИКС: Обработка загрузки с очисткой при ошибке
 router.post('/', upload.single('file'), async (req, res) => {
-  try {
-    const file = req.file;
-    if (!file) {
-      return res.status(400).json({ error: 'Файл не загружен' });
-    }
+  const file = req.file;
+  
+  if (!file) {
+    return res.status(400).json({ error: 'Файл не загружен' });
+  }
 
+  try {
+    const safeName = sanitizeFilename(file.originalname);
+    
     let fileUrl = `/uploads/${file.filename}`;
     let fileType = 'file';
 
@@ -44,7 +70,9 @@ router.post('/', upload.single('file'), async (req, res) => {
       try {
         const thumbnailPath = path.join(uploadDir, `thumb_${file.filename}`);
         await sharp(file.path).resize(200, 200, { fit: 'inside' }).toFile(thumbnailPath);
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Ошибка создания миниатюры:', e.message);
+      }
     } else if (file.mimetype.startsWith('video/')) {
       fileType = 'video';
     } else if (file.mimetype.startsWith('audio/')) {
@@ -54,13 +82,25 @@ router.post('/', upload.single('file'), async (req, res) => {
     res.json({
       url: fileUrl,
       type: fileType,
-      name: file.originalname,
+      name: safeName || file.originalname,
       size: file.size,
       mimetype: file.mimetype
     });
 
   } catch (error) {
     console.error('Upload error:', error);
+    
+    // 🔥 ФИКС: Удаляем файл при ошибке
+    try {
+      if (file && file.path) {
+        fs.unlink(file.path, (err) => {
+          if (err) console.warn('Не удалось удалить файл:', err.message);
+        });
+      }
+    } catch (cleanupError) {
+      console.warn('Ошибка очистки:', cleanupError.message);
+    }
+    
     res.status(500).json({ error: 'Ошибка загрузки файла' });
   }
 });

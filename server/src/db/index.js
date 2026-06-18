@@ -3,6 +3,10 @@ const path = require('path');
 
 const db = new sqlite3.Database(path.join(__dirname, '../../messenger.db'));
 
+// 🔥 ФИКС: Включаем WAL режим для избежания SQLITE_BUSY
+db.run('PRAGMA journal_mode = WAL;');
+db.run('PRAGMA synchronous = NORMAL;');
+
 db.serialize(() => {
   // Таблица пользователей
   db.run(`
@@ -32,6 +36,11 @@ db.serialize(() => {
     )
   `);
 
+  // 🔥 ФИКС: Индексы для ускорения запросов
+  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_from_user ON messages(from_user)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_to_user ON messages(to_user)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)`);
+
   // Таблица реакций
   db.run(`
     CREATE TABLE IF NOT EXISTS message_reactions (
@@ -46,7 +55,7 @@ db.serialize(() => {
     )
   `);
 
-  console.log('✅ SQLite база данных готова');
+  console.log('✅ SQLite база данных готова (WAL режим включён)');
 });
 
 module.exports = db;

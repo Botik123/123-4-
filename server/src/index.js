@@ -1,12 +1,6 @@
 const http = require('http');
 const app = require('./app');
-const { 
-  setupWebSocket, 
-  clients, 
-  broadcastStatus, 
-  broadcastOnlineUsers,
-  sendAllStatuses
-} = require('./socket');
+const { setupWebSocket } = require('./socket');
 const config = require('./config');
 
 const server = http.createServer(app);
@@ -21,12 +15,6 @@ server.on('error', (error) => {
 });
 
 const wss = setupWebSocket(server);
-
-// Передаём функции в app для использования в routes
-app.set('clients', clients);
-app.set('broadcastStatus', broadcastStatus);
-app.set('broadcastOnlineUsers', broadcastOnlineUsers);
-app.set('sendAllStatuses', sendAllStatuses);
 
 process.on('SIGINT', () => {
   console.log('\n🛑 Завершение работы...');
@@ -48,6 +36,7 @@ server.listen(config.port, () => {
 ╠══════════════════════════════════════════════════╣
 ║  HTTP:    http://localhost:${config.port}        ║
 ║  WebSocket: ws://localhost:${config.port}        ║
+║  Redis:   ${config.redisUrl}                     ║
 ╚══════════════════════════════════════════════════╝
   `);
 });

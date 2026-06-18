@@ -39,6 +39,7 @@ router.post('/', sanitizeBody, async (req, res) => {
     const messageId = uuidv4();
     const timestamp = Date.now();
 
+    // 🔥 ФИКС: Сначала сохраняем в БД
     await db.createMessage(
       messageId,
       req.userId,
@@ -59,6 +60,7 @@ router.post('/', sanitizeBody, async (req, res) => {
       reply_to: reply_to || null
     };
 
+    // Только после успешного сохранения отправляем через WebSocket
     const delivered = sendMessageToUser(to, messageData);
 
     res.json({

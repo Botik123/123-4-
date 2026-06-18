@@ -82,42 +82,30 @@ export const useWebSocket = ({
             case 'auth_success':
               console.log('✅ Аутентификация успешна');
               break;
-              
             case 'message':
               onMessage?.(data);
               break;
-              
             case 'message_edited':
               onMessageEdited?.(data);
               break;
-              
             case 'message_deleted':
               onMessageDeleted?.(data);
               break;
-              
             case 'reaction':
               onReaction?.(data);
               break;
-              
             case 'status':
-              console.log(`📡 Получен статус: пользователь ${data.userId} -> ${data.online ? 'онлайн' : 'оффлайн'}`);
               onStatus?.(data);
               break;
-              
             case 'new_user':
-              console.log('🆕 Получен новый пользователь:', data.user);
               onNewUser?.(data);
               break;
-              
             case 'online_users':
-              console.log('📡 Получен список онлайн:', data.users);
               onOnlineUsers?.(data.users || []);
               break;
-              
             case 'error':
               console.error('❌ Server error:', data.message);
               break;
-              
             default:
               console.log('📨 Неизвестный тип:', data.type);
           }
@@ -128,12 +116,11 @@ export const useWebSocket = ({
 
       socket.onclose = (event) => {
         if (!isMounted.current) return;
-        console.log(`🔌 WebSocket disconnected: ${event.code} - ${event.reason || 'Без причины'}`);
+        console.log(`🔌 WebSocket disconnected: ${event.code}`);
         setIsConnected(false);
         setIsConnecting(false);
         
         if (event.code === 1000 || event.code === 1001 || event.code === 1006) {
-          console.log('⚠️ Переподключение отключено для кода:', event.code);
           return;
         }
 
@@ -150,8 +137,6 @@ export const useWebSocket = ({
               connect(userId);
             }
           }, delay);
-        } else {
-          console.error('❌ Достигнут лимит попыток переподключения');
         }
       };
 
@@ -179,7 +164,6 @@ export const useWebSocket = ({
       wsRef.current.send(JSON.stringify(data));
       return true;
     }
-    console.warn('⚠️ WebSocket не открыт');
     return false;
   }, []);
 

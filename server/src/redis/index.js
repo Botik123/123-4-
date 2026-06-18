@@ -1,33 +1,75 @@
-const memoryStore = new Map();
+const redis = require('redis');
+const config = require('../config');
 
-const client = {
-  set: async (key, value, options) => {
-    memoryStore.set(key, value);
-    return true;
-  },
+let client = null;
+
+// 🔥 ФИКС: Обработка ошибок подключения
+try {
+  client = redis.createClient({
+    url: config.redisUrl,
+    socket: {
+      reconnectStrategy: (retries) => {
+        if (retries > 10) {
+          console.error('❌ Redis: превышено число попыток переподключения');
+          return new Error('Redis connection failed');
+        }
+        return Math.min(retries * 100, 3000);
+      }
+    }
+  });
+
+  client.on('error', (err) => {
+    console.error('❌ Redis ошибка:', err.message);
+  });
+
+  client.on('connect', () => {
+    console.log('✅ Redis подключен');
+  });
+
+  client.on('reconnecting', () => {
+    console.log('🔄 Redis переподключение...');
+  });
+
+  client.connect().catch((err) => {
+    console.error('❌ Redis не удалось подключиться:', err.message);
+    client = null;
+  });
+
+} catch (error) {
+  console.error('❌ Redis инициализация не удалась:', error.message);
+  client = null;
+}
+
+// 🔥 ФИКС: Безопасные обёртки для методов
+const safeRedis = {
   get: async (key) => {
-    return memoryStore.get(key) || null;
+    if (!client) return null;
+    try {
+      return await client.get(key);
+    } catch (error) {
+      console.error('Redis GET error:', error.message);
+      return null;
+    }
+  },
+  set: async (key, value, options) => {
+    if (!client) return null;
+    try {
+      return await client.set(key, value, options);
+    } catch (error) {
+      console.error('Redis SET error:', error.message);
+      return null;
+    }
   },
   del: async (key) => {
-    memoryStore.delete(key);
-    return true;
-  },
-  on: (event, callback) => {
-    if (event === 'connect') {
-      setTimeout(callback, 100);
+    if (!client) return null;
+    try {
+      return await client.del(key);
+    } catch (error) {
+      console.error('Redis DEL error:', error.message);
+      return null;
     }
-    if (event === 'error') {}
   },
-  connect: async () => {
-    console.log('✅ In-memory storage готов');
-    console.log('⚠️ Для production установите Redis');
-    return true;
-  }
+  isConnected: () => !!client && client.isOpen
 };
 
-// Имитируем подключение
-setTimeout(() => {
-  console.log('✅ In-memory storage активен');
-}, 200);
-
-module.exports = client;
+module.exports = safeRedis;

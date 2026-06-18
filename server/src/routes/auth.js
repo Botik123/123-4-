@@ -39,7 +39,7 @@ router.post('/register', sanitizeBody, async (req, res) => {
 
     const token = generateToken(userId);
 
-    // 🔥 Рассылаем нового пользователя всем
+    // Рассылаем нового пользователя всем
     const { broadcastNewUser } = require('../socket');
     broadcastNewUser({ id: userId, username });
 

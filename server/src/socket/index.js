@@ -1,7 +1,30 @@
 const WebSocket = require('ws');
 const { verifyToken } = require('../middleware/auth');
 
+// Хранилище активных подключений
 const clients = new Map();
+
+// 🔥 ФИКС: Аутентификация при подключении
+const authenticateWebSocket = (ws, req) => {
+  return new Promise((resolve, reject) => {
+    // Получаем токен из заголовка или URL
+    const token = req.headers['sec-websocket-protocol'] || 
+                   new URL(req.url, 'http://localhost').searchParams.get('token');
+    
+    if (!token) {
+      ws.close(1008, 'Token required');
+      return reject(new Error('Token required'));
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      ws.close(1008, 'Invalid token');
+      return reject(new Error('Invalid token'));
+    }
+
+    resolve(decoded.userId);
+  });
+};
 
 const setupWebSocket = (server) => {
   const wss = new WebSocket.Server({ 
@@ -9,63 +32,49 @@ const setupWebSocket = (server) => {
     perMessageDeflate: false,
   });
 
-  wss.on('connection', (ws, req) => {
+  wss.on('connection', async (ws, req) => {
     console.log('🔌 Новое WebSocket соединение');
 
     let currentUserId = null;
 
+    // 🔥 ФИКС: Аутентификация при подключении
+    try {
+      currentUserId = await authenticateWebSocket(ws, req);
+      
+      // Закрываем старое соединение если есть
+      if (clients.has(currentUserId)) {
+        const oldWs = clients.get(currentUserId);
+        if (oldWs && oldWs.readyState === WebSocket.OPEN) {
+          oldWs.close(1000, 'Duplicate connection');
+        }
+      }
+      
+      clients.set(currentUserId, ws);
+      
+      ws.send(JSON.stringify({ 
+        type: 'auth_success', 
+        userId: currentUserId 
+      }));
+
+      broadcastStatus(currentUserId, true);
+      broadcastOnlineUsers();
+      sendAllStatuses(ws);
+      
+      console.log(`✅ Пользователь ${currentUserId} авторизован (клиентов: ${clients.size})`);
+
+    } catch (error) {
+      console.error('❌ Ошибка авторизации:', error.message);
+      ws.close(1008, error.message);
+      return;
+    }
+
+    // Обработка сообщений
     ws.on('message', async (data) => {
       try {
         if (!data || data.length === 0) return;
-        
         const parsed = JSON.parse(data.toString());
-        console.log('📩 Получено сообщение:', parsed.type);
-
+        
         switch (parsed.type) {
-          case 'auth': {
-            if (!parsed.token) {
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                message: 'Токен не предоставлен' 
-              }));
-              ws.close(1008, 'No token');
-              return;
-            }
-
-            const decoded = verifyToken(parsed.token);
-            if (!decoded) {
-              ws.send(JSON.stringify({ 
-                type: 'error', 
-                message: 'Недействительный токен' 
-              }));
-              ws.close(1008, 'Invalid token');
-              return;
-            }
-
-            currentUserId = decoded.userId;
-            
-            if (clients.has(currentUserId)) {
-              const oldWs = clients.get(currentUserId);
-              if (oldWs && oldWs.readyState === WebSocket.OPEN) {
-                oldWs.close(1000, 'Duplicate connection');
-              }
-            }
-            
-            clients.set(currentUserId, ws);
-            
-            ws.send(JSON.stringify({ 
-              type: 'auth_success', 
-              userId: currentUserId 
-            }));
-
-            broadcastStatus(currentUserId, true);
-            broadcastOnlineUsers();
-            sendAllStatuses(ws);
-            
-            console.log(`✅ Пользователь ${currentUserId} авторизован (клиентов: ${clients.size})`);
-            break;
-          }
-
           case 'typing': {
             const targetWs = clients.get(parsed.to);
             if (targetWs && targetWs.readyState === WebSocket.OPEN) {
@@ -76,7 +85,6 @@ const setupWebSocket = (server) => {
             }
             break;
           }
-
           default:
             console.log('Неизвестный тип:', parsed.type);
         }
@@ -89,6 +97,7 @@ const setupWebSocket = (server) => {
       }
     });
 
+    // 🔥 ФИКС: Удаление при отключении
     ws.on('close', (code, reason) => {
       console.log(`🔌 Соединение закрыто: ${code} - ${reason || 'Без причины'}`);
       if (currentUserId) {
@@ -101,8 +110,14 @@ const setupWebSocket = (server) => {
 
     ws.on('error', (error) => {
       console.error('WebSocket ошибка:', error);
+      if (currentUserId) {
+        clients.delete(currentUserId);
+        broadcastStatus(currentUserId, false);
+        broadcastOnlineUsers();
+      }
     });
 
+    // Ping для проверки соединения
     const pingInterval = setInterval(() => {
       clients.forEach((client, userId) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -123,14 +138,13 @@ const setupWebSocket = (server) => {
   return wss;
 };
 
-// Рассылка нового пользователя
+// ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
+
 const broadcastNewUser = (userData) => {
   const message = JSON.stringify({
     type: 'new_user',
     user: userData
   });
-  
-  console.log(`📡 Рассылка нового пользователя: ${userData.username} (${userData.id})`);
 
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
@@ -139,7 +153,6 @@ const broadcastNewUser = (userData) => {
   });
 };
 
-// Отправка статусов всех пользователей новому клиенту
 const sendAllStatuses = (ws) => {
   const statuses = Array.from(clients.keys()).map(userId => ({
     userId,
@@ -157,11 +170,8 @@ const sendAllStatuses = (ws) => {
       }));
     }
   });
-  
-  console.log(`📡 Отправлены статусы ${statuses.length} пользователей новому клиенту`);
 };
 
-// Рассылка статуса
 const broadcastStatus = (userId, isOnline) => {
   const statusMessage = JSON.stringify({
     type: 'status',
@@ -177,7 +187,6 @@ const broadcastStatus = (userId, isOnline) => {
   });
 };
 
-// Рассылка списка онлайн
 const broadcastOnlineUsers = () => {
   const onlineUsers = Array.from(clients.keys());
   const message = JSON.stringify({
@@ -192,7 +201,6 @@ const broadcastOnlineUsers = () => {
   });
 };
 
-// Отправка сообщения получателю
 const sendMessageToUser = (to, messageData) => {
   const recipientWs = clients.get(to);
   if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
@@ -205,7 +213,6 @@ const sendMessageToUser = (to, messageData) => {
   return false;
 };
 
-// Уведомление об обновлении сообщения
 const notifyMessageUpdate = (to, type, data) => {
   const recipientWs = clients.get(to);
   if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
@@ -218,7 +225,6 @@ const notifyMessageUpdate = (to, type, data) => {
   return false;
 };
 
-// Рассылка реакции
 const broadcastReaction = (messageId, userId, reaction, targetUserId) => {
   const targetWs = clients.get(targetUserId);
   if (targetWs && targetWs.readyState === WebSocket.OPEN) {

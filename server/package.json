@@ -1,7 +1,7 @@
 {
   "name": "messenger-server",
   "version": "2.0.0",
-  "description": "Real-time messenger server",
+  "description": "Real-time messenger server with security fixes",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -19,7 +19,8 @@
     "jsonwebtoken": "^9.0.2",
     "dompurify": "^3.0.6",
     "jsdom": "^23.0.1",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "redis": "^4.6.10"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

@@ -1,7 +1,9 @@
 const db = require('./index');
 
+// Все запросы используют плейсхолдеры для защиты от SQL-инъекций
 module.exports = {
-  // Пользователи
+  // ============ ПОЛЬЗОВАТЕЛИ ============
+  
   getUserById: (id) => {
     return new Promise((resolve, reject) => {
       db.get('SELECT id, username, avatar FROM users WHERE id = ?', [id], (err, row) => {
@@ -42,7 +44,8 @@ module.exports = {
     });
   },
 
-  // Сообщения
+  // ============ СООБЩЕНИЯ ============
+  
   createMessage: (id, from, to, text, timestamp, replyTo, forwardedFrom) => {
     return new Promise((resolve, reject) => {
       db.run(
@@ -120,6 +123,8 @@ module.exports = {
     });
   },
 
+  // ============ РЕАКЦИИ ============
+  
   addReaction: (id, messageId, userId, reaction) => {
     return new Promise((resolve, reject) => {
       db.run(
