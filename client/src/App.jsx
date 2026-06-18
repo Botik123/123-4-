@@ -50,6 +50,7 @@ function App() {
     updateMessage,
     removeMessage,
     loadHistory,
+    clearMessages,
     markAsRead
   } = useMessages(user?.id, selectedUser?.id);
   
@@ -105,17 +106,18 @@ function App() {
       const onlineSet = new Set(onlineUserIds);
       
       setUsers(prev => {
-        if (!Array.isArray(prev)) return [];
+        if (!Array.isArray(prev) || prev.length === 0) return [];
         return prev.map(u => ({
           ...u,
-          online: onlineSet.has(u.id)
+          online: onlineSet.has(u.id),
+          last_seen: onlineSet.has(u.id) ? Date.now() : u.last_seen
         }));
       });
       
       if (selectedUser) {
         setSelectedUser(prev => ({
           ...prev,
-          online: onlineSet.has(prev.id)
+          online: prev ? onlineSet.has(prev.id) : false
         }));
       }
     }
@@ -144,6 +146,8 @@ function App() {
   // Загрузка истории сообщений при выборе пользователя
   useEffect(() => {
     if (selectedUser && user) {
+      // Очищаем сообщения перед загрузкой нового чата
+      clearMessages();
       loadHistory(user.id, selectedUser.id);
       
       // На мобильных открываем чат при выборе

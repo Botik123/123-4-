@@ -103,13 +103,13 @@ const MessageInput = ({
       const result = await uploadAPI.upload(file);
       let fileText = '';
       if (result.type === 'image') {
-        fileText = `📷 Изображение: ${result.url}`;
+        fileText = `📷 Изображение: ${result.name || file.name} ${result.url}`;
       } else if (result.type === 'audio') {
-        fileText = `🎵 Аудио: ${result.name} ${result.url}`;
+        fileText = `🎵 Аудио: ${result.name || file.name} ${result.url}`;
       } else if (result.type === 'video') {
-        fileText = `🎬 Видео: ${result.name} ${result.url}`;
+        fileText = `🎬 Видео: ${result.name || file.name} ${result.url}`;
       } else {
-        fileText = `📎 Файл: ${result.name} ${result.url}`;
+        fileText = `📎 Файл: ${result.name || file.name} ${result.url}`;
       }
       
       if (onFileSend) {
@@ -119,7 +119,7 @@ const MessageInput = ({
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Ошибка загрузки файла');
+      alert('Ошибка загрузки файла: ' + (error.message || 'Неизвестная ошибка'));
     } finally {
       setUploading(false);
       if (fileInputRef.current) {

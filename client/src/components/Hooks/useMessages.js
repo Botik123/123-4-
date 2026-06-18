@@ -18,8 +18,13 @@ export const useMessages = (userId, otherUserId) => {
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
+  // Ref для хранения текущего собеседника (для фильтрации WebSocket сообщений)
+  const currentChatRef = useRef({ userId, otherUserId });
+  currentChatRef.current = { userId, otherUserId };
+
   /**
    * Загрузка истории сообщений между пользователями
+   * Очищает предыдущие сообщения при смене чата
    */
   const loadHistory = useCallback(async (userId, otherUserId) => {
     if (!userId || !otherUserId) return;
@@ -27,12 +32,21 @@ export const useMessages = (userId, otherUserId) => {
     setLoading(true);
     try {
       const data = await messagesAPI.getHistory(userId, otherUserId);
+      // Очищаем сообщения перед загрузкой новых (чтобы не смешивались чаты)
       setMessages(data);
     } catch (error) {
       console.error('Error loading messages:', error);
+      setMessages([]);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  /**
+   * Очистить сообщения при смене чата
+   */
+  const clearMessages = useCallback(() => {
+    setMessages([]);
   }, []);
 
   /**
@@ -85,7 +99,7 @@ export const useMessages = (userId, otherUserId) => {
         });
         return;
       }
-      
+
       // Заменяем временный ID на реальный от сервера
       setMessages(prev => prev.map(msg => 
         msg.id === tempId ? { ...msg, id: result.id, pending: false } : msg
@@ -234,8 +248,21 @@ export const useMessages = (userId, otherUserId) => {
 
   /**
    * Добавить сообщение из WebSocket (полученное от других)
+   * Фильтрует сообщения только для текущего чата
    */
   const addMessage = useCallback((message) => {
+    const { userId: currentUserId, otherUserId: currentOtherId } = currentChatRef.current;
+    
+    // Проверяем, относится ли сообщение к текущему чату
+    const isRelatedToCurrentChat = 
+      (message.from === currentUserId && message.to === currentOtherId) ||
+      (message.from === currentOtherId && message.to === currentUserId);
+    
+    if (!isRelatedToCurrentChat) {
+      // Сообщение не относится к текущему чату - игнорируем
+      return;
+    }
+    
     setMessages(prev => {
       if (prev.find(m => m.id === message.id)) return prev;
       return [...prev, message];
@@ -278,6 +305,7 @@ export const useMessages = (userId, otherUserId) => {
     messages,
     loading,
     loadHistory,
+    clearMessages,
     sendMessage,
     editMessage,
     deleteMessage,

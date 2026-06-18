@@ -24,18 +24,25 @@ export const useUsers = () => {
     });
   }, []);
 
-  // ИСПРАВЛЕННОЕ ОБНОВЛЕНИЕ СТАТУСА
+  // Обновление статуса пользователя (онлайн/оффлайн)
   const updateUserStatus = useCallback((userId, online, lastSeen) => {
     setUsers(prev => prev.map(u => {
       if (u.id === userId) {
         return { 
           ...u, 
-          online: online === true, // Приводим к boolean
+          online: online === true || online === 'true' || online === 1,
           last_seen: lastSeen || Date.now()
         };
       }
       return u;
     }));
+  }, []);
+
+  // Обновление статуса для конкретного пользователя (используется в Sidebar)
+  const updateUserOnline = useCallback((userId, isOnline) => {
+    setUsers(prev => prev.map(u => 
+      u.id === userId ? { ...u, online: isOnline } : u
+    ));
   }, []);
 
   return {

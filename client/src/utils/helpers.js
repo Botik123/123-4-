@@ -73,7 +73,7 @@ export const parseFileMessage = (text) => {
   }
   
   // Парсинг изображений: 📷 Изображение: name url
-  const imageMatch = text.match(/📷 Изображение:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
+  const imageMatch = text.match(/📷 Изображение:\s*(.+?)\s+(https?:\/\/\S+)$/);
   if (imageMatch) {
     return { 
       type: 'image', 
@@ -83,7 +83,7 @@ export const parseFileMessage = (text) => {
   }
   
   // Парсинг аудио: 🎵 Аудио: name url
-  const audioMatch = text.match(/🎵 Аудио:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
+  const audioMatch = text.match(/🎵 Аудио:\s*(.+?)\s+(https?:\/\/\S+)$/);
   if (audioMatch) {
     return { 
       type: 'audio', 
@@ -93,7 +93,7 @@ export const parseFileMessage = (text) => {
   }
   
   // Парсинг видео: 🎬 Видео: name url
-  const videoMatch = text.match(/🎬 Видео:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
+  const videoMatch = text.match(/🎬 Видео:\s*(.+?)\s+(https?:\/\/\S+)$/);
   if (videoMatch) {
     return { 
       type: 'video', 
@@ -103,7 +103,7 @@ export const parseFileMessage = (text) => {
   }
   
   // Парсинг файлов: 📎 Файл: name url
-  const fileMatch = text.match(/📎 Файл:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
+  const fileMatch = text.match(/📎 Файл:\s*(.+?)\s+(https?:\/\/\S+)$/);
   if (fileMatch) {
     return { 
       type: 'file', 
