@@ -24,10 +24,21 @@ export const useUsers = () => {
   }, []);
 
   const addUser = useCallback((user) => {
+    console.log(`👤 addUser: ${user?.username} (${user?.id})`);
     setUsers(prev => {
-      // Не добавляем пользователя если он уже есть или это текущий пользователь
-      if (prev.find(u => u.id === user.id)) return prev;
-      return [...prev, user];
+      // Защита от пустого списка
+      if (!prev || !Array.isArray(prev)) {
+        console.warn('⚠️ addUser: prev users is not an array');
+        return user ? [user] : [];
+      }
+      // Не добавляем дубликаты
+      if (prev.find(u => u.id === user?.id)) {
+        console.log(`  ℹ️ Пользователь уже есть в списке`);
+        return prev;
+      }
+      const updated = [...prev, user];
+      console.log(`  ✅ Добавлен пользователь. Всего: ${updated.length}`);
+      return updated;
     });
   }, []);
 

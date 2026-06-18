@@ -1,11 +1,9 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
-const db = require('../db/queries');
 const { authMiddleware } = require('../middleware/auth');
 const { sanitizeBody } = require('../middleware/sanitize');
-const { sendMessageToUser, sendMessageToRoom, notifyMessageUpdate, broadcastReaction } = require('../socket');
+const messageService = require('../services/messageService');
 const redis = require('../redis');
 
 const router = express.Router();
@@ -13,28 +11,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // ============ ПРОВЕРКА ДУБЛИКАТОВ ============
-
-const isMessageDuplicate = async (clientId) => {
-  if (!clientId) return false;
-  
-  try {
-    const exists = await redis.get(`msg:${clientId}`);
-    return exists !== null;
-  } catch (error) {
-    console.error('Redis duplicate check error:', error);
-    return false;
-  }
-};
-
-const markMessageAsProcessed = async (clientId) => {
-  if (!clientId) return;
-  
-  try {
-    await redis.set(`msg:${clientId}`, '1', { EX: 5 });
-  } catch (error) {
-    console.error('Redis mark error:', error);
-  }
-};
+// (оставлено для обратной совместимости, используется в сервисе)
 
 // ============ РОУТЫ ============
 
@@ -46,7 +23,7 @@ router.get('/:userId/:otherUserId', async (req, res) => {
     
     console.log(`📥 Запрос истории: userId=${userId}, otherUserId=${otherUserId}`);
     
-    // Получаем сообщения между текущим пользователем и собеседником
+    const db = require('../db/queries');
     const messages = await db.getMessagesBetweenUsers(userId, otherUserId);
     console.log(`📤 Отправка ${messages.length} сообщений клиенту`);
     res.json(messages);
@@ -57,7 +34,7 @@ router.get('/:userId/:otherUserId', async (req, res) => {
 });
 
 // Отправить сообщение
-router.post('/', sanitizeBody, async (req, res) => {
+router.post('/', async (req, res) => {
   const { to, text, reply_to, chatId, clientId } = req.body;
   const from = req.user.id;
 
@@ -69,62 +46,14 @@ router.post('/', sanitizeBody, async (req, res) => {
     return res.status(400).json({ error: 'Сообщение не может быть пустым' });
   }
 
-  // Проверка дубликата
-  if (clientId) {
-    const isDuplicate = await isMessageDuplicate(clientId);
-    if (isDuplicate) {
-      console.log(`⚠️ Дубликат сообщения ${clientId} отклонён`);
-      return res.status(409).json({ 
-        error: 'Duplicate message', 
-        clientId,
-        alreadyProcessed: true 
-      });
-    }
-  }
-
   try {
-    const messageId = uuidv4();
-    const timestamp = Date.now();
-
-    await db.createMessage(
-      messageId,
-      from,
-      to,
-      text.trim(),
-      timestamp,
-      reply_to || null,
-      null,
-      clientId || null
-    );
-
-    if (clientId) {
-      await markMessageAsProcessed(clientId);
+    const result = await messageService.createAndSend(from, to, text, reply_to, chatId, clientId);
+    
+    if (result.error) {
+      return res.status(409).json(result);
     }
-
-    const messageData = {
-      id: messageId,
-      from: from,
-      to: to,
-      text: text.trim(),
-      timestamp: timestamp,
-      read: 0,
-      reply_to: reply_to || null,
-      clientId: clientId || null
-    };
-
-    let delivered = false;
-    if (chatId) {
-      delivered = sendMessageToRoom(chatId, messageData);
-    } else {
-      delivered = sendMessageToUser(to, messageData);
-    }
-
-    res.json({
-      id: messageId,
-      ...messageData,
-      delivered
-    });
-
+    
+    res.json(result);
   } catch (error) {
     console.error('❌ Ошибка отправки сообщения:', error);
     res.status(500).json({ error: 'Ошибка отправки сообщения' });
@@ -132,9 +61,11 @@ router.post('/', sanitizeBody, async (req, res) => {
 });
 
 // Редактировать сообщение
-router.put('/:messageId', sanitizeBody, async (req, res) => {
+router.put('/:messageId', async (req, res) => {
   const { text, to } = req.body;
   const userId = req.user.id;
+  const db = require('../db/queries');
+  const { notifyMessageUpdate } = require('../socket');
 
   if (!text || text.trim() === '') {
     return res.status(400).json({ error: 'Сообщение не может быть пустым' });
@@ -175,9 +106,11 @@ router.put('/:messageId', sanitizeBody, async (req, res) => {
 });
 
 // Удалить сообщение (с удалением файла)
-router.delete('/:messageId', authMiddleware, async (req, res) => {
+router.delete('/:messageId', async (req, res) => {
   const { to } = req.body;
   const userId = req.user.id;
+  const db = require('../db/queries');
+  const { notifyMessageUpdate } = require('../socket');
 
   if (!to) {
     return res.status(400).json({ error: 'Не указан получатель' });
@@ -236,7 +169,7 @@ router.delete('/:messageId', authMiddleware, async (req, res) => {
 });
 
 // Переслать сообщение
-router.post('/forward', authMiddleware, sanitizeBody, async (req, res) => {
+router.post('/forward', async (req, res) => {
   const { to, messageId } = req.body;
   const userId = req.user.id;
 
@@ -245,44 +178,13 @@ router.post('/forward', authMiddleware, sanitizeBody, async (req, res) => {
   }
 
   try {
-    const originalMessage = await db.getMessageById(messageId);
+    const result = await messageService.forward(userId, to, messageId);
     
-    if (!originalMessage) {
-      return res.status(404).json({ error: 'Сообщение не найдено' });
+    if (result.error) {
+      return res.status(404).json(result);
     }
 
-    const newMessageId = uuidv4();
-    const timestamp = Date.now();
-    
-    const forwardedText = `📎 Переслано: ${originalMessage.text}`;
-
-    await db.createMessage(
-      newMessageId,
-      userId,
-      to,
-      forwardedText,
-      timestamp,
-      null,
-      originalMessage.from_user,
-      null
-    );
-
-    const delivered = sendMessageToUser(to, {
-      id: newMessageId,
-      from: userId,
-      to: to,
-      text: forwardedText,
-      timestamp: timestamp,
-      read: 0,
-      forwarded_from: originalMessage.from_user
-    });
-
-    res.json({ 
-      id: newMessageId, 
-      delivered,
-      forwarded_from: originalMessage.from_user
-    });
-
+    res.json(result);
   } catch (error) {
     console.error('Error forwarding message:', error);
     res.status(500).json({ error: 'Ошибка пересылки' });
@@ -290,15 +192,18 @@ router.post('/forward', authMiddleware, sanitizeBody, async (req, res) => {
 });
 
 // Поставить реакцию
-router.post('/reaction', authMiddleware, async (req, res) => {
+router.post('/reaction', async (req, res) => {
   const { messageId, reaction, to } = req.body;
   const userId = req.user.id;
+  const db = require('../db/queries');
+  const { broadcastReaction } = require('../socket');
 
   if (!messageId || !reaction || !to) {
     return res.status(400).json({ error: 'Неверные данные' });
   }
 
   try {
+    const { v4: uuidv4 } = require('uuid');
     const id = uuidv4();
     await db.addReaction(id, messageId, userId, reaction);
 
@@ -313,7 +218,7 @@ router.post('/reaction', authMiddleware, async (req, res) => {
 });
 
 // Отметить как прочитанное
-router.post('/read', authMiddleware, async (req, res) => {
+router.post('/read', async (req, res) => {
   const { from } = req.body;
   const userId = req.user.id;
 
@@ -322,19 +227,7 @@ router.post('/read', authMiddleware, async (req, res) => {
   }
 
   try {
-    console.log(`📖 POST /read: userId=${userId}, from=${from}`);
-    const result = await db.markMessagesAsRead(from, userId);
-    console.log(`  📊 Обновлено строк в БД: ${result.changes}`);
-    
-    // Уведомляем отправителя что его сообщения прочитаны
-    const { notifyMessageUpdate } = require('../socket');
-    const sent = notifyMessageUpdate(from, 'messages_read', {
-      byUserId: userId,
-      timestamp: Date.now()
-    });
-    console.log(`  📡 Уведомление отправлено: ${sent}`);
-    
-    console.log(`📖 Сообщения от ${from} прочитаны пользователем ${userId}`);
+    const result = await messageService.markAsRead(from, userId);
     res.json({ success: true, changes: result.changes });
   } catch (error) {
     console.error('Error marking as read:', error);

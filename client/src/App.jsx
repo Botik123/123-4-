@@ -128,8 +128,9 @@ function App() {
     },
     // Новый пользователь зарегистрировался
     onNewUser: (data) => {
+      console.log(`👤 onNewUser:`, data);
       // Не добавляем текущего пользователя
-      if (data.user?.id !== user?.id) {
+      if (data.user?.id && data.user.id !== user?.id) {
         addUser(data.user);
       }
     },
@@ -138,12 +139,27 @@ function App() {
       console.log(`📡 onOnlineUsers:`, onlineUserIds);
       const onlineSet = new Set(onlineUserIds);
       
-      // Обновляем всех пользователей в списке
-      users.forEach(u => {
-        if (u.id !== user?.id) {
-          const isOnline = onlineSet.has(u.id);
-          updateUserStatus(u.id, isOnline, isOnline ? Date.now() : u.last_seen);
+      // Используем функциональное обновление чтобы избежать stale closure
+      setUsers(prev => {
+        if (!prev || !Array.isArray(prev)) {
+          console.warn('⚠️ onOnlineUsers: users is not an array');
+          return prev || [];
         }
+        
+        const updated = prev.map(u => {
+          if (u.id !== user?.id) {
+            const isOnline = onlineSet.has(u.id);
+            return {
+              ...u,
+              online: isOnline,
+              last_seen: isOnline ? Date.now() : u.last_seen
+            };
+          }
+          return u;
+        });
+        
+        console.log(`  ✅ Обновлены статусы. Онлайн: ${onlineUserIds.length} из ${updated.length}`);
+        return updated;
       });
       
       // Обновляем selectedUser
