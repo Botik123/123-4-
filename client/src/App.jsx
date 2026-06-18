@@ -62,10 +62,14 @@ function App() {
     connect,
     disconnect
   } = useWebSocket({
-    // Новое сообщение получено
+    // Новое сообщение получено через WebSocket
     onMessage: (data) => {
+      console.log(`📩 onMessage: from=${data.from}, to=${data.to}, current selected=${selectedUser?.id}`);
+      // Добавляем сообщение если оно для текущего чата
       addMessage(data);
+      // Если сообщение от текущего собеседника - помечаем как прочитанное
       if (selectedUser && data.from === selectedUser.id) {
+        console.log(`✅ Помечаем сообщения от ${data.from} как прочитанные`);
         playMessageSound();
         markAsRead(data.from);
       }
@@ -78,6 +82,16 @@ function App() {
     onMessageDeleted: (data) => {
       updateMessage(data.messageId, { text: '🗑️ Сообщение удалено', deleted: true });
     },
+    // Сообщения прочитаны (ответ от сервера)
+    onMessagesRead: (data) => {
+      console.log(`📖 onMessagesRead: byUserId=${data.byUserId}`);
+      // Обновляем галочки у всех сообщений этому пользователю
+      if (selectedUser && data.byUserId === selectedUser.id) {
+        setMessages(prev => prev.map(msg => 
+          msg.to_user === data.byUserId ? { ...msg, read: 1 } : msg
+        ));
+      }
+    },
     // Реакция на сообщение (получена от другого пользователя)
     onReaction: (data) => {
       // data: { messageId, userId, reaction, to }
@@ -86,15 +100,18 @@ function App() {
         addReaction(data.messageId, data.reaction, selectedUser.id);
       }
     },
-    // Изменение статуса пользователя (онлайн/оффлайн)
+    // Изменение статуса пользователя (онлайн/оффлайн) - от WebSocket
     onStatus: (data) => {
+      console.log(`📡 onStatus: userId=${data.userId}, online=${data.online}`);
+      // Обновляем в списке пользователей
       updateUserStatus(data.userId, data.online, data.last_seen);
+      // Обновляем selectedUser если это он
       if (selectedUser && selectedUser.id === data.userId) {
-        setSelectedUser(prev => ({
+        setSelectedUser(prev => prev ? {
           ...prev,
           online: data.online,
-          last_seen: data.last_seen
-        }));
+          last_seen: data.last_seen || Date.now()
+        } : null);
       }
     },
     // Новый пользователь зарегистрировался
@@ -104,22 +121,26 @@ function App() {
         addUser(data.user);
       }
     },
-    // Список онлайн пользователей
+    // Список онлайн пользователей (при подключении)
     onOnlineUsers: (onlineUserIds) => {
+      console.log(`📡 onOnlineUsers:`, onlineUserIds);
       const onlineSet = new Set(onlineUserIds);
       
-      // Обновляем статусы всех пользователей кроме текущего
+      // Обновляем всех пользователей в списке
       users.forEach(u => {
         if (u.id !== user?.id) {
-          updateUserStatus(u.id, onlineSet.has(u.id), onlineSet.has(u.id) ? Date.now() : u.last_seen);
+          const isOnline = onlineSet.has(u.id);
+          updateUserStatus(u.id, isOnline, isOnline ? Date.now() : u.last_seen);
         }
       });
       
+      // Обновляем selectedUser
       if (selectedUser) {
-        setSelectedUser(prev => ({
+        setSelectedUser(prev => prev ? {
           ...prev,
-          online: prev ? onlineSet.has(prev.id) : false
-        }));
+          online: onlineSet.has(prev.id),
+          last_seen: onlineSet.has(prev.id) ? Date.now() : prev.last_seen
+        } : null);
       }
     }
   });

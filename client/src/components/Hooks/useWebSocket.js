@@ -13,6 +13,7 @@ import { WS_URL } from '../../utils/constants';
  * @param {function} callbacks.onMessageEdited - Сообщение отредактировано
  * @param {function} callbacks.onMessageDeleted - Сообщение удалено
  * @param {function} callbacks.onReaction - Реакция на сообщение
+ * @param {function} callbacks.onMessagesRead - Сообщения прочитаны
  * @param {function} callbacks.onStatus - Изменение статуса пользователя
  * @param {function} callbacks.onNewUser - Новый пользователь
  * @param {function} callbacks.onOnlineUsers - Список онлайн пользователей
@@ -22,6 +23,7 @@ export const useWebSocket = ({
   onMessageEdited, 
   onMessageDeleted,
   onReaction,
+  onMessagesRead,
   onStatus,
   onNewUser,
   onOnlineUsers
@@ -117,6 +119,10 @@ export const useWebSocket = ({
             case 'message_deleted':
               onMessageDeleted?.(data);
               break;
+            case 'messages_read':
+              console.log(`📖 Сообщения прочитаны: byUserId=${data.byUserId}`);
+              onMessagesRead?.(data);
+              break;
             case 'reaction':
               onReaction?.(data);
               break;
@@ -165,7 +171,7 @@ export const useWebSocket = ({
       console.error('❌ Failed to create WebSocket:', error);
       setIsConnecting(false);
     }
-  }, [isConnecting, onMessage, onMessageEdited, onMessageDeleted, onReaction, onStatus, onNewUser, onOnlineUsers]);
+  }, [isConnecting, onMessage, onMessageEdited, onMessageDeleted, onReaction, onMessagesRead, onStatus, onNewUser, onOnlineUsers]);
 
   /**
    * Отключение от WebSocket

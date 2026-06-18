@@ -293,9 +293,14 @@ export const useMessages = (userId, otherUserId) => {
     
     try {
       await messagesAPI.markAsRead(from);
-      setMessages(prev => prev.map(msg => 
-        msg.from_user === from && msg.to_user === userId ? { ...msg, read: 1 } : msg
-      ));
+      // Обновляем все сообщения где from_user = отправитель, а to_user = текущий пользователь
+      setMessages(prev => prev.map(msg => {
+        if (msg.from_user === from && msg.to_user === userId && msg.read !== 1) {
+          console.log(`✅ Сообщение ${msg.id} прочитано`);
+          return { ...msg, read: 1 };
+        }
+        return msg;
+      }));
     } catch (error) {
       console.error('Error marking as read:', error);
     }

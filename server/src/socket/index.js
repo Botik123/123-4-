@@ -345,7 +345,7 @@ const sendAllStatuses = (ws) => {
 };
 
 /**
- * Транслировать изменение статуса пользователя всем
+ * Транслировать изменение статуса пользователя всем кроме отправителя
  * @param {string} userId - ID пользователя
  * @param {boolean} isOnline - Статус онлайн/оффлайн
  */
@@ -357,8 +357,9 @@ const broadcastStatus = (userId, isOnline) => {
     last_seen: Date.now()
   });
 
-  clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
+  clients.forEach((client, clientId) => {
+    // Не отправляем самому пользователю
+    if (clientId !== userId && client.readyState === WebSocket.OPEN) {
       client.send(statusMessage);
     }
   });

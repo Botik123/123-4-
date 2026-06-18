@@ -322,8 +322,17 @@ router.post('/read', authMiddleware, async (req, res) => {
   }
 
   try {
-    await db.markMessagesAsRead(from, userId);
-    res.json({ success: true });
+    const result = await db.markMessagesAsRead(from, userId);
+    
+    // Уведомляем отправителя что его сообщения прочитаны
+    const { notifyMessageUpdate } = require('../socket');
+    notifyMessageUpdate(from, 'messages_read', {
+      byUserId: userId,
+      timestamp: Date.now()
+    });
+    
+    console.log(`📖 Сообщения от ${from} прочитаны пользователем ${userId}`);
+    res.json({ success: true, changes: result.changes });
   } catch (error) {
     console.error('Error marking as read:', error);
     res.status(500).json({ error: 'Ошибка' });

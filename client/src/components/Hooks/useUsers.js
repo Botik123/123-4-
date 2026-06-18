@@ -29,11 +29,14 @@ export const useUsers = () => {
 
   // Обновление статуса пользователя (онлайн/оффлайн)
   const updateUserStatus = useCallback((userId, online, lastSeen) => {
+    console.log(`🔄 updateUserStatus: ${userId}, online=${online}`);
     setUsers(prev => prev.map(u => {
       if (u.id === userId) {
+        const newOnline = online === true || online === 'true' || online === 1;
+        console.log(`  📍 Обновляем: ${u.username} -> online=${newOnline}`);
         return { 
           ...u, 
-          online: online === true || online === 'true' || online === 1,
+          online: newOnline,
           last_seen: lastSeen || Date.now()
         };
       }
