@@ -14,7 +14,6 @@ function App() {
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
-  const [currentChatId, setCurrentChatId] = useState(null);
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   const isConnectingRef = useRef(false);
 
@@ -44,14 +43,12 @@ function App() {
     markAsRead
   } = useMessages(user?.id, selectedUser?.id);
   
-  // 🔥 ТЕПЕРЬ joinRoom И leaveRoom ДОСТУПНЫ
+  // 🔥 БЕЗ КОМНАТ
   const {
     isConnecting,
     sendTyping,
     connect,
-    disconnect,
-    joinRoom,
-    leaveRoom
+    disconnect
   } = useWebSocket({
     onMessage: (data) => {
       addMessage(data);
@@ -121,24 +118,15 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // 🔥 ТЕПЕРЬ joinRoom И leaveRoom РАБОТАЮТ
+  // 🔥 БЕЗ КОМНАТ — ТОЛЬКО ЗАГРУЗКА ИСТОРИИ
   useEffect(() => {
     if (selectedUser && user) {
-      const chatId = [user.id, selectedUser.id].sort().join('_');
-      setCurrentChatId(chatId);
-      joinRoom(chatId);
       loadHistory(user.id, selectedUser.id);
       
       if (window.innerWidth <= 768) {
         setIsMobileChatOpen(true);
       }
     }
-    
-    return () => {
-      if (currentChatId) {
-        leaveRoom(currentChatId);
-      }
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser]);
 
@@ -189,16 +177,14 @@ function App() {
 
   const handleSendMessage = (text) => {
     if (!selectedUser) return;
-    const chatId = currentChatId;
-    sendMessage(selectedUser.id, text, replyTo?.id, chatId);
+    sendMessage(selectedUser.id, text, replyTo?.id);
     playSendSound();
     setReplyTo(null);
   };
 
   const handleFileSend = (fileText) => {
     if (!selectedUser) return;
-    const chatId = currentChatId;
-    sendMessage(selectedUser.id, fileText, null, chatId);
+    sendMessage(selectedUser.id, fileText);
     playSendSound();
   };
 

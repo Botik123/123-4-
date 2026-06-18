@@ -171,34 +171,13 @@ export const useWebSocket = ({
     send({ type: 'typing', to });
   }, [send]);
 
-  // 🔥 НОВЫЕ МЕТОДЫ ДЛЯ КОМНАТ
-  const joinRoom = useCallback((chatId) => {
-    console.log(`📌 Подписка на комнату: ${chatId}`);
-    send({ type: 'join_room', chatId });
-  }, [send]);
-
-  const leaveRoom = useCallback((chatId) => {
-    console.log(`📌 Отписка от комнаты: ${chatId}`);
-    send({ type: 'leave_room', chatId });
-  }, [send]);
-
-  useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-      cleanup();
-    };
-  }, [cleanup]);
-
-  // 🔥 ВОЗВРАЩАЕМ ВСЕ МЕТОДЫ, ВКЛЮЧАЯ joinRoom И leaveRoom
+  // 🔥 БЕЗ КОМНАТ — ВОЗВРАЩАЕМ ТОЛЬКО БАЗОВЫЕ МЕТОДЫ
   return {
     isConnecting,
     isConnected,
     connect,
     disconnect,
     send,
-    sendTyping,
-    joinRoom,
-    leaveRoom
+    sendTyping
   };
 };
