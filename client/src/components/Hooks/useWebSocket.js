@@ -1,6 +1,22 @@
+/**
+ * @file client/src/components/Hooks/useWebSocket.js
+ * @description Custom hook для WebSocket соединения
+ * Управление подключением, переподключением, обработкой событий
+ */
+
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { WS_URL } from '../../utils/constants';
 
+/**
+ * @param {object} callbacks - Объект с обработчиками событий
+ * @param {function} callbacks.onMessage - Новое сообщение
+ * @param {function} callbacks.onMessageEdited - Сообщение отредактировано
+ * @param {function} callbacks.onMessageDeleted - Сообщение удалено
+ * @param {function} callbacks.onReaction - Реакция на сообщение
+ * @param {function} callbacks.onStatus - Изменение статуса пользователя
+ * @param {function} callbacks.onNewUser - Новый пользователь
+ * @param {function} callbacks.onOnlineUsers - Список онлайн пользователей
+ */
 export const useWebSocket = ({ 
   onMessage, 
   onMessageEdited, 
@@ -8,16 +24,19 @@ export const useWebSocket = ({
   onReaction,
   onStatus,
   onNewUser,
-  onOnlineUsers // Добавляем новый обработчик
+  onOnlineUsers
 }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef(null);
   const reconnectTimerRef = useRef(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 3;
-  const isMounted = useRef(true);
+  const maxReconnectAttempts = 3; // Лимит попыток переподключения
+  const isMounted = useRef(true); // Флаг смонтированности компонента
 
+  /**
+   * Очистка ресурсов при отключении
+   */
   const cleanup = useCallback(() => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
@@ -33,7 +52,12 @@ export const useWebSocket = ({
     setIsConnecting(false);
   }, []);
 
+  /**
+   * Подключение к WebSocket серверу
+   * @param {string} userId - ID пользователя для аутентификации
+   */
   const connect = useCallback((userId) => {
+    // Если уже подключены - не подключаемся повторно
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       console.log('✅ WebSocket уже подключен');
       return;
@@ -69,6 +93,7 @@ export const useWebSocket = ({
         setIsConnecting(false);
         setIsConnected(true);
         reconnectAttempts.current = 0;
+        // Отправляем токен для аутентификации
         socket.send(JSON.stringify({ type: 'auth', token: token }));
       };
 
@@ -78,6 +103,7 @@ export const useWebSocket = ({
           const data = JSON.parse(event.data);
           console.log('📩 WebSocket получено:', data.type);
           
+          // Обработка типов сообщений от сервера
           switch (data.type) {
             case 'auth_success':
               console.log('✅ Аутентификация успешна');
@@ -103,7 +129,6 @@ export const useWebSocket = ({
               onNewUser?.(data);
               break;
             case 'online_users':
-              // Обработка списка онлайн пользователей
               onOnlineUsers?.(data.users);
               break;
             case 'error':
@@ -123,6 +148,7 @@ export const useWebSocket = ({
         setIsConnected(false);
         setIsConnecting(false);
         
+        // Не переподключаемся при нормальном закрытии
         if (event.code === 1000 || event.code === 1001 || event.code === 1006) {
           return;
         }
@@ -141,12 +167,18 @@ export const useWebSocket = ({
     }
   }, [isConnecting, onMessage, onMessageEdited, onMessageDeleted, onReaction, onStatus, onNewUser, onOnlineUsers]);
 
+  /**
+   * Отключение от WebSocket
+   */
   const disconnect = useCallback(() => {
     console.log('🔌 Отключение WebSocket');
     reconnectAttempts.current = 0;
     cleanup();
   }, [cleanup]);
 
+  /**
+   * Отправка произвольных данных через WebSocket
+   */
   const send = useCallback((data) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
@@ -156,10 +188,30 @@ export const useWebSocket = ({
     return false;
   }, []);
 
+  /**
+   * Отправить событие начала набора текста
+   */
   const sendTyping = useCallback((to) => {
     send({ type: 'typing', to });
   }, [send]);
 
+  /**
+   * Отправить событие начала набора (явный флаг)
+   */
+  const sendTypingStart = useCallback((to) => {
+    send({ type: 'typing', to, typing: true });
+  }, [send]);
+
+  /**
+   * Отправить событие прекращения набора
+   */
+  const sendTypingStop = useCallback((to) => {
+    send({ type: 'typing', to, typing: false });
+  }, [send]);
+
+  // ==========================================
+  // МОНТИРОВАНИЕ/РАЗМОНТИРОВАНИЕ КОМПОНЕНТА
+  // ==========================================
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -174,6 +226,8 @@ export const useWebSocket = ({
     connect,
     disconnect,
     send,
-    sendTyping
+    sendTyping,
+    sendTypingStart,
+    sendTypingStop
   };
 };

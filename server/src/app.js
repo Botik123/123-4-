@@ -1,8 +1,15 @@
+/**
+ * @file server/src/app.js
+ * @description Основное Express-приложение
+ * Настраивает middleware, маршруты и глобальные обработчики ошибок
+ */
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 
+// Импорт маршрутов
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const messageRoutes = require('./routes/messages');
@@ -10,10 +17,18 @@ const uploadRoutes = require('./routes/upload');
 
 const app = express();
 
+// === MIDDLEWARE ===
+
+// Разрешаем CORS для всех origin (в продакшене ограничить!)
 app.use(cors());
+
+// Парсинг JSON с увеличенным лимитом для файловых сообщений
 app.use(express.json({ limit: '50mb' }));
 
-// Обработка кривого JSON
+/**
+ * Обработчик невалидного JSON
+ * Должен идти ПОСЛЕ express.json() для перехвата ошибок парсинга
+ */
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     console.error('❌ Кривой JSON:', err.message);
@@ -22,21 +37,28 @@ app.use((err, req, res, next) => {
   next();
 });
 
+// Статические файлы для загруженных изображений/файлов
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-app.use('/auth', authRoutes);
-app.use('/users', userRoutes);
-app.use('/messages', messageRoutes);
-app.use('/upload', uploadRoutes);
+// === МАРШРУТЫ ===
+app.use('/auth', authRoutes);      // Регистрация, логин
+app.use('/users', userRoutes);     // Список пользователей
+app.use('/messages', messageRoutes); // Сообщения, реакции
+app.use('/upload', uploadRoutes);  // Загрузка файлов
 
+// Health check для мониторинга
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() });
 });
 
-// Глобальный обработчик ошибок
+/**
+ * Глобальный обработчик ошибок
+ * Перехватывает все необработанные ошибки приложения
+ */
 app.use((err, req, res, next) => {
   console.error('❌ Глобальная ошибка:', err.stack);
   
+  // Обработка ошибок Multer (загрузка файлов)
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({ error: 'Файл слишком большой (макс. 50MB)' });
@@ -44,6 +66,7 @@ app.use((err, req, res, next) => {
     return res.status(400).json({ error: err.message });
   }
   
+  // Безопасный ответ: не показываем детали ошибок в продакшене
   const status = err.status || 500;
   const message = err.isOperational ? err.message : 'Внутренняя ошибка сервера';
   

@@ -1,5 +1,6 @@
 import React, { memo, useState } from 'react';
-import { parseFileMessage, getReplyPreview, getCleanText, escapeHtml } from '../../utils/helpers';
+import DOMPurify from 'dompurify';
+import { parseFileMessage, getReplyPreview, getCleanText } from '../../utils/helpers';
 import { REACTIONS_LIST } from '../../utils/constants';
 
 // Рендер файлового сообщения
@@ -83,19 +84,25 @@ const renderMessageContent = (msg, replyMessage) => {
 
   const hasReply = replyMessage && !msg.text.includes('↩️ Ответ:');
 
+  // 🔥 ФИКС: Очистка HTML от XSS
+  const sanitizedText = DOMPurify.sanitize(msg.text || '', {
+    ALLOWED_TAGS: ['b', 'i', 'u', 's', 'a', 'br'],
+    ALLOWED_ATTR: ['href', 'target'],
+  });
+
   return (
     <>
-      {hasReply && (
+      {hasReply && replyMessage.text && (
         <div className="reply-preview-inline">
           <div className="reply-preview-label">↩️ Ответ</div>
           <div className="reply-preview-text">
-            {replyMessage.text || 'Сообщение'}
+            {DOMPurify.sanitize(replyMessage.text.substring(0, 50), { ALLOWED_TAGS: [] })}
           </div>
         </div>
       )}
       <div 
         className="message-text-content" 
-        dangerouslySetInnerHTML={{ __html: escapeHtml(msg.text || '') }} 
+        dangerouslySetInnerHTML={{ __html: sanitizedText }} 
       />
     </>
   );
@@ -128,7 +135,7 @@ const Message = memo(({
   };
 
   const handleDelete = () => {
-    if (onDelete && window.confirm('Удалить сообщение?')) {
+    if (onDelete) {
       onDelete(message.id);
     }
   };

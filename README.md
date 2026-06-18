@@ -1,10 +1,10 @@
 # 📱 Мессенджер (Аналог Telegram)
 
-Современный веб-мессенджер на Node.js, React и WebSocket.
+Современный веб-мессенджер на Node.js, React и WebSocket с полной защитой от XSS, CSRF и SQL-инъекций.
 
 ## ✨ Функционал
 
-- 🔐 Регистрация и авторизация
+- 🔐 Регистрация и авторизация (JWT)
 - 💬 Личные сообщения в реальном времени (WebSocket)
 - 📎 Отправка файлов (изображения, видео, аудио, документы)
 - ✏️ Редактирование сообщений
@@ -19,8 +19,47 @@
 
 ## 🛠️ Технологии
 
-- **Backend:** Node.js, Express, WebSocket, SQLite, Multer, Sharp, bcrypt
-- **Frontend:** React, CSS
+**Backend:**
+- Node.js + Express - HTTP сервер
+- WebSocket (ws) - Real-time сообщения
+- SQLite (WAL режим) - База данных
+- Redis - Кэширование (идемпотентность сообщений)
+- Multer + Sharp - Загрузка и обработка файлов
+- bcrypt - Хеширование паролей
+- JWT - Аутентификация
+- DOMPurify - Санитизация данных
+
+**Frontend:**
+- React 18 - UI библиотека
+- Custom Hooks - Управление состоянием
+- WebSocket API - Real-time соединение
+- DOMPurify - XSS защита
+- CSS3 - Адаптивный дизайн
+
+## 📁 Структура проекта
+
+```
+├── server/
+│   ├── src/
+│   │   ├── index.js        # Точка входа
+│   │   ├── app.js          # Express приложение
+│   │   ├── config/         # Конфигурация
+│   │   ├── db/             # База данных (SQLite)
+│   │   ├── middleware/     # Auth, sanitize
+│   │   ├── routes/         # API endpoints
+│   │   ├── socket/         # WebSocket логика
+│   │   └── redis/          # Redis клиент
+│   └── uploads/            # Загруженные файлы
+├── client/
+│   ├── src/
+│   │   ├── App.jsx         # Главный компонент
+│   │   ├── api/            # API клиент
+│   │   ├── components/     # React компоненты
+│   │   ├── Hooks/          # Custom hooks
+│   │   └── utils/          # Утилиты, хелперы
+│   └── public/
+└── README.md
+```
 
 ## 🚀 Запуск
 
@@ -38,3 +77,58 @@ cd server && npm start
 
 # Запуск клиента (в другом терминале)
 cd client && npm start
+```
+
+## 🌐 API Endpoints
+
+| Метод | Endpoint | Описание | Auth |
+|-------|----------|----------|------|
+| POST | `/auth/register` | Регистрация | ❌ |
+| POST | `/auth/login` | Вход | ❌ |
+| GET | `/users` | Список пользователей | ✅ |
+| GET | `/messages/:userId/:otherUserId` | История сообщений | ✅ |
+| POST | `/messages` | Отправить сообщение | ✅ |
+| PUT | `/messages/:messageId` | Редактировать сообщение | ✅ |
+| DELETE | `/messages/:messageId` | Удалить сообщение | ✅ |
+| POST | `/messages/forward` | Переслать сообщение | ✅ |
+| POST | `/messages/reaction` | Добавить реакцию | ✅ |
+| POST | `/messages/read` | Отметить прочитанным | ✅ |
+| POST | `/upload` | Загрузить файл | ✅ |
+
+## 🔌 WebSocket События
+
+**Клиент → Сервер:**
+- `auth` - Аутентификация с токеном
+- `join_room` - Войти в комнату
+- `leave_room` - Выйти из комнаты
+- `typing` - Индикатор набора текста
+
+**Сервер → Клиент:**
+- `auth_success` - Успешная аутентификация
+- `message` - Новое сообщение
+- `message_edited` - Сообщение отредактировано
+- `message_deleted` - Сообщение удалено
+- `reaction` - Реакция на сообщение
+- `status` - Изменение статуса пользователя
+- `online_users` - Список онлайн пользователей
+- `new_user` - Новый пользователь
+
+## 🔒 Безопасность
+
+- ✅ JWT аутентификация
+- ✅ XSS защита (DOMPurify на клиенте и сервере)
+- ✅ SQL инъекции (параметризованные запросы)
+- ✅ Идемпотентность сообщений (Redis + clientId)
+- ✅ Валидация входных данных
+- ✅ Ограничение размера файлов (50MB)
+
+## 📝 Заметки
+
+- Порт сервера: `3002` (настраивается в `.env`)
+- Время жизни JWT токена: 7 дней
+- Максимальный размер файла: 50MB
+- База данных: SQLite в режиме WAL
+
+## 👨‍💻 Авторы
+
+NLP-Core-Team

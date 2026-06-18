@@ -44,7 +44,7 @@ router.get('/:userId/:otherUserId', async (req, res) => {
     const userId = req.user.id;
     const otherUserId = req.params.otherUserId;
     
-    if (userId !== req.params.userId) {
+    if (userId !== req.params.otherUserId) {
       return res.status(403).json({ error: 'Доступ запрещён' });
     }
 
@@ -236,7 +236,7 @@ router.delete('/:messageId', async (req, res) => {
 });
 
 // Переслать сообщение
-router.post('/forward', sanitizeBody, async (req, res) => {
+router.post('/forward', authMiddleware, sanitizeBody, async (req, res) => {
   const { to, messageId } = req.body;
   const userId = req.user.id;
 
@@ -290,7 +290,7 @@ router.post('/forward', sanitizeBody, async (req, res) => {
 });
 
 // Поставить реакцию
-router.post('/reaction', async (req, res) => {
+router.post('/reaction', authMiddleware, async (req, res) => {
   const { messageId, reaction, to } = req.body;
   const userId = req.user.id;
 
@@ -313,7 +313,7 @@ router.post('/reaction', async (req, res) => {
 });
 
 // Отметить как прочитанное
-router.post('/read', async (req, res) => {
+router.post('/read', authMiddleware, async (req, res) => {
   const { from } = req.body;
   const userId = req.user.id;
 

@@ -1,6 +1,16 @@
+/**
+ * @file client/src/utils/helpers.js
+ * @description Вспомогательные утилиты для мессенджера
+ * Парсинг сообщений, форматирование, группировка
+ */
+
 import { API_URL } from './constants';
 
-// Цвет аватара
+/**
+ * Генерирует цвет для аватара на основе имени
+ * @param {string} name - Имя пользователя
+ * @returns {string} HEX цвет
+ */
 export const getAvatarColor = (name) => {
   if (!name) return '#667eea';
   let hash = 0;
@@ -11,7 +21,11 @@ export const getAvatarColor = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// Экранирование HTML (XSS защита)
+/**
+ * Экранирование HTML для защиты от XSS
+ * @param {string} text - Текст для экранирования
+ * @returns {string} Безопасный HTML
+ */
 export const escapeHtml = (text) => {
   if (!text) return '';
   const div = document.createElement('div');
@@ -19,7 +33,11 @@ export const escapeHtml = (text) => {
   return div.innerHTML;
 };
 
-// Формат времени "был(а)"
+/**
+ * Форматирование времени "был(а) в сети"
+ * @param {number} timestamp - Unix timestamp последнего посещения
+ * @returns {string} Человекочитаемый формат
+ */
 export const formatLastSeen = (timestamp) => {
   if (!timestamp) return 'Не в сети';
   
@@ -42,7 +60,11 @@ export const formatLastSeen = (timestamp) => {
   });
 };
 
-// Парсинг файлового сообщения
+/**
+ * Парсинг текстового сообщения с файлом
+ * @param {string} text - Текст сообщения
+ * @returns {object|null} Объект с типом и URL файла
+ */
 export const parseFileMessage = (text) => {
   if (!text || typeof text !== 'string') return null;
   
@@ -50,6 +72,7 @@ export const parseFileMessage = (text) => {
     return { type: 'deleted' };
   }
   
+  // Парсинг изображений: 📷 Изображение: name url
   const imageMatch = text.match(/📷 Изображение:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (imageMatch) {
     return { 
@@ -59,6 +82,7 @@ export const parseFileMessage = (text) => {
     };
   }
   
+  // Парсинг аудио: 🎵 Аудио: name url
   const audioMatch = text.match(/🎵 Аудио:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (audioMatch) {
     return { 
@@ -68,6 +92,7 @@ export const parseFileMessage = (text) => {
     };
   }
   
+  // Парсинг видео: 🎬 Видео: name url
   const videoMatch = text.match(/🎬 Видео:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (videoMatch) {
     return { 
@@ -77,6 +102,7 @@ export const parseFileMessage = (text) => {
     };
   }
   
+  // Парсинг файлов: 📎 Файл: name url
   const fileMatch = text.match(/📎 Файл:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (fileMatch) {
     return { 
@@ -89,7 +115,11 @@ export const parseFileMessage = (text) => {
   return null;
 };
 
-// Получение превью сообщения для ответа
+/**
+ * Получение превью сообщения для отображения в ответе
+ * @param {object} msg - Объект сообщения
+ * @returns {string} Краткое превью
+ */
 export const getMessagePreview = (msg) => {
   if (!msg) return '';
   
@@ -112,7 +142,11 @@ export const getMessagePreview = (msg) => {
   return cleanText.length > 50 ? cleanText.substring(0, 50) + '...' : cleanText;
 };
 
-// Получение чистого текста без префикса ответа
+/**
+ * Удаление префикса ответа из текста
+ * @param {string} text - Исходный текст
+ * @returns {string} Очищенный текст
+ */
 export const getCleanText = (text) => {
   if (!text) return '';
   const replyMatch = text.match(/^↩️ Ответ: "[^"]*"\n/);
@@ -122,7 +156,11 @@ export const getCleanText = (text) => {
   return text;
 };
 
-// Получение превью ответа
+/**
+ * Извлечение текста ответа из сообщения
+ * @param {string} text - Текст сообщения
+ * @returns {string|null} Текст ответа или null
+ */
 export const getReplyPreview = (text) => {
   if (!text) return null;
   const replyMatch = text.match(/^↩️ Ответ: "([^"]*)"\n/);
@@ -132,7 +170,11 @@ export const getReplyPreview = (text) => {
   return null;
 };
 
-// Группировка сообщений по дате
+/**
+ * Группировка сообщений по дате для отображения разделителей
+ * @param {array} messages - Массив сообщений
+ * @returns {array} Группированные сообщения
+ */
 export const groupMessagesByDate = (messages) => {
   const groups = [];
   let currentDate = null;

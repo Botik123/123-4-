@@ -89,9 +89,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     
     try {
       if (file && file.path) {
-        fs.unlink(file.path, (err) => {
-          if (err) console.warn('Не удалось удалить файл:', err.message);
-        });
+        fs.unlink(file.path, () => {});
       }
     } catch (cleanupError) {
       console.warn('Ошибка очистки:', cleanupError.message);

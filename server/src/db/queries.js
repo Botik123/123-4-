@@ -63,7 +63,7 @@ module.exports = {
     return new Promise((resolve, reject) => {
       db.all(
         `SELECT * FROM messages 
-         WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
+         WHERE ((from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?))
          AND deleted = 0
          ORDER BY timestamp ASC LIMIT ?`,
         [userId1, userId2, userId2, userId1, limit],

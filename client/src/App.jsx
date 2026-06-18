@@ -1,3 +1,9 @@
+/**
+ * @file client/src/App.jsx
+ * @description Главный компонент приложения мессенджера
+ * Интеграция всех hooks и компонентов, управление состоянием
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import AuthForm from './components/Auth/AuthForm';
@@ -11,14 +17,17 @@ import { playMessageSound, playSendSound } from './utils/sounds';
 import { parseFileMessage, getCleanText, getReplyPreview } from './utils/helpers';
 
 function App() {
+  // === СОСТОЯНИЕ ПРИЛОЖЕНИЯ ===
   const [isDarkTheme, setIsDarkTheme] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [replyTo, setReplyTo] = useState(null);
-  const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
-  const isConnectingRef = useRef(false);
+  const [selectedUser, setSelectedUser] = useState(null); // Выбранный собеседник
+  const [replyTo, setReplyTo] = useState(null); // Сообщение для ответа
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState(false); // Мобильная версия
+  const isConnectingRef = useRef(false); // Флаг подключения WebSocket
 
+  // === AUTH HOOK ===
   const { user, loading: authLoading, login, register, logout } = useAuth();
   
+  // === USERS HOOK ===
   const { 
     users, 
     loading: usersLoading, 
@@ -28,6 +37,7 @@ function App() {
     setUsers
   } = useUsers();
   
+  // === MESSAGES HOOK ===
   const {
     messages,
     loading: messagesLoading,
@@ -43,13 +53,16 @@ function App() {
     markAsRead
   } = useMessages(user?.id, selectedUser?.id);
   
-  // 🔥 БЕЗ КОМНАТ
+  // === WEBSOCKET HOOK ===
+  // Обработчики событий реального времени
   const {
     isConnecting,
-    sendTyping,
+    sendTypingStart,
+    sendTypingStop,
     connect,
     disconnect
   } = useWebSocket({
+    // Новое сообщение получено
     onMessage: (data) => {
       addMessage(data);
       if (selectedUser && data.from === selectedUser.id) {
@@ -57,18 +70,22 @@ function App() {
         markAsRead(data.from);
       }
     },
+    // Сообщение отредактировано отправителем
     onMessageEdited: (data) => {
       updateMessage(data.messageId, { text: data.text, edited: true });
     },
+    // Сообщение удалено
     onMessageDeleted: (data) => {
       updateMessage(data.messageId, { text: '🗑️ Сообщение удалено', deleted: true });
     },
+    // Реакция на сообщение
     onReaction: (data) => {
       const targetUserId = data.to || selectedUser?.id;
       if (targetUserId) {
         addReaction(data.messageId, data.reaction, targetUserId);
       }
     },
+    // Изменение статуса пользователя (онлайн/оффлайн)
     onStatus: (data) => {
       updateUserStatus(data.userId, data.online, data.last_seen);
       if (selectedUser && selectedUser.id === data.userId) {
@@ -79,9 +96,11 @@ function App() {
         }));
       }
     },
+    // Новый пользователь зарегистрировался
     onNewUser: (data) => {
       addUser(data.user);
     },
+    // Список онлайн пользователей
     onOnlineUsers: (onlineUserIds) => {
       const onlineSet = new Set(onlineUserIds);
       
@@ -102,7 +121,11 @@ function App() {
     }
   });
 
-  // Подключаем WebSocket при авторизации
+  // ==========================================
+  // === EFFECTS: ЖИЗНЕННЫЙ ЦИКЛ ===
+  // ==========================================
+  
+  // Подключаем WebSocket при авторизации пользователя
   useEffect(() => {
     if (user && !isConnectingRef.current) {
       isConnectingRef.current = true;
@@ -118,11 +141,12 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // 🔥 БЕЗ КОМНАТ — ТОЛЬКО ЗАГРУЗКА ИСТОРИИ
+  // Загрузка истории сообщений при выборе пользователя
   useEffect(() => {
     if (selectedUser && user) {
       loadHistory(user.id, selectedUser.id);
       
+      // На мобильных открываем чат при выборе
       if (window.innerWidth <= 768) {
         setIsMobileChatOpen(true);
       }
@@ -130,7 +154,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser]);
 
-  // Дебаг режим
+  // Debug режим - доступ к данным через консоль браузера
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.__debug = {
@@ -147,7 +171,11 @@ function App() {
     }
   }, [messages, users, selectedUser, setUsers]);
 
-  // Обработчики
+  // ==========================================
+  // === ОБРАБОТЧИКИ СОБЫТИЙ ===
+  // ==========================================
+  
+  // Выбор пользователя из списка
   const handleSelectUser = (user) => {
     setSelectedUser(user);
     if (window.innerWidth <= 768) {
@@ -155,12 +183,14 @@ function App() {
     }
   };
 
+  // Кнопка "назад" для мобильных
   const handleBack = () => {
     if (window.innerWidth <= 768) {
       setIsMobileChatOpen(false);
     }
   };
 
+  // Логин пользователя
   const handleLogin = async (username, password) => {
     const result = await login(username, password);
     if (!result.success) {
@@ -168,6 +198,7 @@ function App() {
     }
   };
 
+  // Регистрация нового пользователя
   const handleRegister = async (username, password) => {
     const result = await register(username, password);
     if (!result.success) {
@@ -175,6 +206,7 @@ function App() {
     }
   };
 
+  // Отправка сообщения
   const handleSendMessage = (text) => {
     if (!selectedUser) return;
     sendMessage(selectedUser.id, text, replyTo?.id);
@@ -182,17 +214,20 @@ function App() {
     setReplyTo(null);
   };
 
+  // Отправка файла (через текстовое представление)
   const handleFileSend = (fileText) => {
     if (!selectedUser) return;
     sendMessage(selectedUser.id, fileText);
     playSendSound();
   };
 
+  // Пересылка сообщения
   const handleForwardMessage = (message) => {
     if (!selectedUser) return;
     forwardMessage(selectedUser.id, message.id);
   };
 
+  // Редактирование сообщения
   const handleEditMessage = (message) => {
     if (!selectedUser) return;
     const newText = prompt('Редактировать сообщение:', message.text);
@@ -201,6 +236,7 @@ function App() {
     }
   };
 
+  // Удаление сообщения (подтверждение в компоненте Message)
   const handleDeleteMessage = (messageId) => {
     if (!selectedUser) return;
     if (window.confirm('Удалить сообщение?')) {
@@ -208,20 +244,23 @@ function App() {
     }
   };
 
+  // Добавление реакции
   const handleAddReaction = (messageId, reaction) => {
     if (!selectedUser) return;
     addReaction(messageId, reaction, selectedUser.id);
   };
 
+  // Индикатор набора текста
   const handleTyping = (isTyping) => {
     if (!selectedUser) return;
     if (isTyping) {
-      sendTyping(selectedUser.id);
+      sendTypingStart(selectedUser.id);
     } else {
-      sendTyping(selectedUser.id);
+      sendTypingStop(selectedUser.id);
     }
   };
 
+  // Переключение темы
   const toggleTheme = () => {
     setIsDarkTheme(!isDarkTheme);
     document.documentElement.setAttribute('data-theme', !isDarkTheme ? 'dark' : 'light');

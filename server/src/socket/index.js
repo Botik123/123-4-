@@ -1,13 +1,25 @@
+/**
+ * @file server/src/socket/index.js
+ * @description WebSocket сервер для real-time общения
+ * Обработка подключений, аутентификация, комнаты, статусы пользователей
+ */
+
 const WebSocket = require('ws');
 const { verifyToken } = require('../middleware/auth');
 
+// Хранилище активных подключений: userId -> WebSocket
 const clients = new Map();
+// Хранилище комнат: chatId -> Set<userId>
 const rooms = new Map();
 
+/**
+ * Настройка WebSocket сервера
+ * @param {http.Server} server - HTTP сервер для совместного использования порта
+ */
 const setupWebSocket = (server) => {
   const wss = new WebSocket.Server({ 
     server,
-    perMessageDeflate: false,
+    perMessageDeflate: false, // Отключаем сжатие для производительности
   });
 
   wss.on('connection', async (ws, req) => {
@@ -16,13 +28,16 @@ const setupWebSocket = (server) => {
     let currentUserId = null;
     let currentRoom = null;
 
-    // 🔥 АУТЕНТИФИКАЦИЯ
+    // ==========================================
+    // 🔥 АУТЕНТИФИКАЦИЯ ПОЛЬЗОВАТЕЛЯ
+    // ==========================================
     ws.on('message', async (data) => {
       try {
-        if (!data || data.length === 0) return;
+        // Защита от пустых и невалидных сообщений
+        if (!data || data.length === 0 || !data.toString().trim()) return;
         const parsed = JSON.parse(data.toString());
         
-        // Обработка auth
+        // Обработка сообщения аутентификации
         if (parsed.type === 'auth' && !currentUserId) {
           const token = parsed.token;
           if (!token) {
@@ -30,6 +45,7 @@ const setupWebSocket = (server) => {
             return;
           }
           
+          // Верификация JWT токена
           const decoded = verifyToken(token);
           if (!decoded) {
             ws.send(JSON.stringify({ type: 'error', message: 'Invalid token' }));
@@ -39,6 +55,7 @@ const setupWebSocket = (server) => {
           
           currentUserId = decoded.userId;
           
+          // Заменяем старое соединение если есть (защита от дубликатов)
           if (clients.has(currentUserId)) {
             const oldWs = clients.get(currentUserId);
             if (oldWs && oldWs.readyState === WebSocket.OPEN) {
@@ -48,11 +65,13 @@ const setupWebSocket = (server) => {
           
           clients.set(currentUserId, ws);
           
+          // Подтверждение аутентификации
           ws.send(JSON.stringify({ 
             type: 'auth_success', 
             userId: currentUserId 
           }));
 
+          // Уведомляем всех о статусе пользователя
           broadcastStatus(currentUserId, true);
           broadcastOnlineUsers();
           sendAllStatuses(ws);
@@ -61,8 +80,11 @@ const setupWebSocket = (server) => {
           return;
         }
         
-        // 🔥 ОБРАБОТКА КОМНАТ
+        // ==========================================
+        // 🔥 ОБРАБОТКА КОМНАТ И СОБЫТИЙ
+        // ==========================================
         switch (parsed.type) {
+          // Вход в комнату чата
           case 'join_room': {
             const { chatId } = parsed;
             if (!chatId) {
@@ -82,6 +104,7 @@ const setupWebSocket = (server) => {
             break;
           }
           
+          // Выход из комнаты
           case 'leave_room': {
             const { chatId } = parsed;
             if (chatId && rooms.has(chatId)) {
@@ -92,8 +115,16 @@ const setupWebSocket = (server) => {
             break;
           }
 
+          // Индикатор набора текста
           case 'typing': {
-            const { to, chatId } = parsed;
+            const { to, chatId, typing } = parsed;
+            // Игнорируем сообщения без флага typing для обратной совместимости
+            if (typing === false) {
+              // Сообщение о прекращении набора - ничего не отправляем
+              break;
+            }
+            
+            // Рассылка пользователям в комнате
             if (chatId && rooms.has(chatId)) {
               const roomUsers = rooms.get(chatId);
               roomUsers.forEach(userId => {
@@ -102,17 +133,20 @@ const setupWebSocket = (server) => {
                   if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                     targetWs.send(JSON.stringify({
                       type: 'typing',
-                      from: currentUserId
+                      from: currentUserId,
+                      isTyping: typing !== false
                     }));
                   }
                 }
               });
             } else {
+              // Личное сообщение
               const targetWs = clients.get(to);
               if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                 targetWs.send(JSON.stringify({
                   type: 'typing',
-                  from: currentUserId
+                  from: currentUserId,
+                  isTyping: typing !== false
                 }));
               }
             }
@@ -131,11 +165,14 @@ const setupWebSocket = (server) => {
       }
     });
 
+    // ==========================================
+    // ОБРАБОТКА ЗАКРЫТИЯ СОЕДИНЕНИЯ
+    // ==========================================
     ws.on('close', (code, reason) => {
       console.log(`🔌 Соединение закрыто: ${code} - ${reason || 'Без причины'}`);
       
       if (currentUserId) {
-        // Удаляем из всех комнат
+        // Удаляем пользователя из всех комнат
         for (const [chatId, users] of rooms) {
           if (users.has(currentUserId)) {
             users.delete(currentUserId);
@@ -145,6 +182,7 @@ const setupWebSocket = (server) => {
           }
         }
         
+        // Удаляем из активных подключений
         clients.delete(currentUserId);
         broadcastStatus(currentUserId, false);
         broadcastOnlineUsers();
@@ -161,11 +199,13 @@ const setupWebSocket = (server) => {
       }
     });
 
+    // ==========================================
+    // PING для поддержания соединения (каждые 30 сек)
+    // ==========================================
     const pingInterval = setInterval(() => {
+      // Проверяем только другие подключения, не текущее
       clients.forEach((client, userId) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.ping();
-        } else {
+        if (client !== ws || client.readyState !== WebSocket.OPEN) {
           clients.delete(userId);
           broadcastStatus(userId, false);
           broadcastOnlineUsers();
@@ -181,8 +221,16 @@ const setupWebSocket = (server) => {
   return wss;
 };
 
-// ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
+// ==========================================
+// ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ======
+// ==========================================
 
+/**
+ * Отправить сообщение всем пользователям в комнате
+ * @param {string} chatId - ID комнаты
+ * @param {object} messageData - Данные сообщения
+ * @returns {boolean} Удалось ли доставить хотя бы одному пользователю
+ */
 const sendMessageToRoom = (chatId, messageData) => {
   const roomUsers = rooms.get(chatId);
   if (!roomUsers) {
@@ -206,6 +254,12 @@ const sendMessageToRoom = (chatId, messageData) => {
   return sentCount > 0;
 };
 
+/**
+ * Отправить сообщение конкретному пользователю
+ * @param {string} to - ID получателя
+ * @param {object} messageData - Данные сообщения
+ * @returns {boolean} Удалось ли доставить
+ */
 const sendMessageToUser = (to, messageData) => {
   const recipientWs = clients.get(to);
   if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
@@ -218,6 +272,12 @@ const sendMessageToUser = (to, messageData) => {
   return false;
 };
 
+/**
+ * Уведомить пользователя об изменении сообщения
+ * @param {string} to - ID получателя
+ * @param {string} type - Тип события (message_edited/message_deleted)
+ * @param {object} data - Данные события
+ */
 const notifyMessageUpdate = (to, type, data) => {
   const recipientWs = clients.get(to);
   if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
@@ -230,6 +290,9 @@ const notifyMessageUpdate = (to, type, data) => {
   return false;
 };
 
+/**
+ * Отправить реакцию пользователю
+ */
 const broadcastReaction = (messageId, userId, reaction, targetUserId) => {
   const targetWs = clients.get(targetUserId);
   if (targetWs && targetWs.readyState === WebSocket.OPEN) {
@@ -242,6 +305,9 @@ const broadcastReaction = (messageId, userId, reaction, targetUserId) => {
   }
 };
 
+/**
+ * Уведомить всех о новом пользователе (после регистрации)
+ */
 const broadcastNewUser = (userData) => {
   const message = JSON.stringify({
     type: 'new_user',
@@ -255,6 +321,9 @@ const broadcastNewUser = (userData) => {
   });
 };
 
+/**
+ * Отправить все текущие статусы новому подключению
+ */
 const sendAllStatuses = (ws) => {
   const statuses = Array.from(clients.keys()).map(userId => ({
     userId,
@@ -274,6 +343,11 @@ const sendAllStatuses = (ws) => {
   });
 };
 
+/**
+ * Транслировать изменение статуса пользователя всем
+ * @param {string} userId - ID пользователя
+ * @param {boolean} isOnline - Статус онлайн/оффлайн
+ */
 const broadcastStatus = (userId, isOnline) => {
   const statusMessage = JSON.stringify({
     type: 'status',
@@ -289,6 +363,9 @@ const broadcastStatus = (userId, isOnline) => {
   });
 };
 
+/**
+ * Отправить список всех онлайн пользователей
+ */
 const broadcastOnlineUsers = () => {
   const onlineUsers = Array.from(clients.keys());
   const message = JSON.stringify({
