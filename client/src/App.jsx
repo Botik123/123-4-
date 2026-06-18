@@ -64,14 +64,14 @@ function App() {
   } = useWebSocket({
     // Новое сообщение получено через WebSocket
     onMessage: (data) => {
-      console.log(`📩 onMessage: from=${data.from}, to=${data.to}, current selected=${selectedUser?.id}`);
+      console.log(`📩 onMessage: from=${data.from}, to=${data.to}, current user=${user?.id}, selected=${selectedUser?.id}`);
       // Добавляем сообщение если оно для текущего чата
       addMessage(data);
-      // Если сообщение от текущего собеседника - помечаем как прочитанное
-      if (selectedUser && data.from === selectedUser.id) {
+      // Если сообщение от текущего собеседника и мы в этом чате - помечаем как прочитанное
+      if (selectedUser && data.from === selectedUser.id && data.to === user?.id) {
         console.log(`✅ Помечаем сообщения от ${data.from} как прочитанные`);
         playMessageSound();
-        markAsRead(data.from);
+        handleMarkAsRead(data.from);
       }
     },
     // Сообщение отредактировано отправителем
@@ -84,21 +84,30 @@ function App() {
     },
     // Сообщения прочитаны (ответ от сервера)
     onMessagesRead: (data) => {
-      console.log(`📖 onMessagesRead: byUserId=${data.byUserId}`);
-      // Обновляем галочки у всех сообщений этому пользователю
-      if (selectedUser && data.byUserId === selectedUser.id) {
-        setMessages(prev => prev.map(msg => 
-          msg.to_user === data.byUserId ? { ...msg, read: 1 } : msg
-        ));
-      }
+      console.log(`📖 onMessagesRead: byUserId=${data.byUserId}, current user=${user?.id}`);
+      // Обновляем галочки у сообщений которые МЫ отправили и ИХ прочитали
+      // data.byUserId - это кто прочитал (собеседник)
+      // Значит обновляем сообщения где from_user = user.id (наши сообщения)
+      setMessages(prev => prev.map(msg => {
+        if (msg.from_user === user?.id && msg.to_user === data.byUserId) {
+          console.log(`✅ Обновляем сообщение ${msg.id} как прочитанное`);
+          return { ...msg, read: 1 };
+        }
+        return msg;
+      }));
     },
     // Реакция на сообщение (получена от другого пользователя)
     onReaction: (data) => {
       // data: { messageId, userId, reaction, to }
-      // Обновляем реакцию в текущем чате
-      if (selectedUser) {
-        addReaction(data.messageId, data.reaction, selectedUser.id);
-      }
+      // userId - кто поставил реакцию (не текущий пользователь)
+      // Просто обновляем реакцию в UI без toggle
+      console.log(`🎭 onReaction: userId=${data.userId}, reaction=${data.reaction}`);
+      updateMessage(data.messageId, {
+        reactions: {
+          ...(messages.find(m => m.id === data.messageId)?.reactions || {}),
+          [data.userId]: data.reaction
+        }
+      });
     },
     // Изменение статуса пользователя (онлайн/оффлайн) - от WebSocket
     onStatus: (data) => {
@@ -295,6 +304,13 @@ function App() {
       sendTypingStop(selectedUser.id);
     }
   };
+
+  // Автоматическое прочтение сообщений при получении
+  const handleMarkAsRead = useCallback((fromUserId) => {
+    if (!fromUserId || !user?.id) return;
+    console.log(`📖 Отмечаем сообщения от ${fromUserId} как прочитанные`);
+    markAsRead(fromUserId);
+  }, [user?.id, markAsRead]);
 
   // Переключение темы
   const toggleTheme = () => {

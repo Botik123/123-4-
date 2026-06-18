@@ -264,8 +264,13 @@ export const useMessages = (userId, otherUserId) => {
     }
     
     setMessages(prev => {
-      if (prev.find(m => m.id === message.id)) return prev;
-      return [...prev, message];
+      // Проверяем дубликаты по id
+      if (prev.find(m => m.id === message.id)) {
+        console.log(`⚠️ Сообщение ${message.id} уже есть, пропускаем`);
+        return prev;
+      }
+      console.log(`➕ Добавляем сообщение ${message.id}`);
+      return [...prev, { ...message, read: message.read || 0 }];
     });
   }, []);
 
@@ -291,16 +296,24 @@ export const useMessages = (userId, otherUserId) => {
   const markAsRead = useCallback(async (from) => {
     if (!from) return;
     
+    console.log(`📖 markAsRead: from=${from}, current userId=${userId}`);
+    
     try {
       await messagesAPI.markAsRead(from);
       // Обновляем все сообщения где from_user = отправитель, а to_user = текущий пользователь
-      setMessages(prev => prev.map(msg => {
-        if (msg.from_user === from && msg.to_user === userId && msg.read !== 1) {
-          console.log(`✅ Сообщение ${msg.id} прочитано`);
-          return { ...msg, read: 1 };
-        }
-        return msg;
-      }));
+      setMessages(prev => {
+        let changed = false;
+        const updated = prev.map(msg => {
+          // Сообщения ОТ from (собеседника) ДЛЯ нас (текущего пользователя)
+          if (msg.from_user === from && msg.to_user === userId && msg.read !== 1) {
+            changed = true;
+            console.log(`✅ Сообщение ${msg.id} (${msg.from_user} -> ${msg.to_user}) прочитано`);
+            return { ...msg, read: 1 };
+          }
+          return msg;
+        });
+        return changed ? updated : prev;
+      });
     } catch (error) {
       console.error('Error marking as read:', error);
     }
