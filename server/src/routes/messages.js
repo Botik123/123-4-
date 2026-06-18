@@ -322,14 +322,17 @@ router.post('/read', authMiddleware, async (req, res) => {
   }
 
   try {
+    console.log(`📖 POST /read: userId=${userId}, from=${from}`);
     const result = await db.markMessagesAsRead(from, userId);
+    console.log(`  📊 Обновлено строк в БД: ${result.changes}`);
     
     // Уведомляем отправителя что его сообщения прочитаны
     const { notifyMessageUpdate } = require('../socket');
-    notifyMessageUpdate(from, 'messages_read', {
+    const sent = notifyMessageUpdate(from, 'messages_read', {
       byUserId: userId,
       timestamp: Date.now()
     });
+    console.log(`  📡 Уведомление отправлено: ${sent}`);
     
     console.log(`📖 Сообщения от ${from} прочитаны пользователем ${userId}`);
     res.json({ success: true, changes: result.changes });

@@ -278,9 +278,21 @@ export const useMessages = (userId, otherUserId) => {
    * Обновить существующее сообщение
    */
   const updateMessage = useCallback((messageId, updates) => {
-    setMessages(prev => prev.map(msg => 
-      msg.id === messageId ? { ...msg, ...updates } : msg
-    ));
+    console.log(`📝 updateMessage: id=${messageId}, updates=`, updates);
+    setMessages(prev => {
+      const updated = prev.map(msg => {
+        if (msg.id === messageId) {
+          const newMsg = { ...msg, ...updates };
+          console.log(`  ✅ Обновил сообщение ${messageId}: read=${newMsg.read}`);
+          return newMsg;
+        }
+        return msg;
+      });
+      if (!prev.find(m => m.id === messageId)) {
+        console.warn(`  ⚠️ Сообщение ${messageId} не найдено (${prev.length} сообщений)`);
+      }
+      return updated;
+    });
   }, []);
 
   /**
@@ -297,9 +309,16 @@ export const useMessages = (userId, otherUserId) => {
     if (!from) return;
     
     console.log(`📖 markAsRead: from=${from}, current userId=${userId}`);
+    console.log(`  📊 Текущие сообщения: ${messages.length}`);
+    messages.forEach(m => {
+      if (m.from_user === from && m.to_user === userId) {
+        console.log(`    - Сообщение ${m.id}: from=${m.from_user}, to=${m.to_user}, read=${m.read}`);
+      }
+    });
     
     try {
       await messagesAPI.markAsRead(from);
+      console.log(`  ✅ API markAsRead выполнен`);
       // Обновляем все сообщения где from_user = отправитель, а to_user = текущий пользователь
       setMessages(prev => {
         let changed = false;
@@ -307,17 +326,18 @@ export const useMessages = (userId, otherUserId) => {
           // Сообщения ОТ from (собеседника) ДЛЯ нас (текущего пользователя)
           if (msg.from_user === from && msg.to_user === userId && msg.read !== 1) {
             changed = true;
-            console.log(`✅ Сообщение ${msg.id} (${msg.from_user} -> ${msg.to_user}) прочитано`);
+            console.log(`  ✅ Сообщение ${msg.id} (${msg.from_user} -> ${msg.to_user}) прочитано`);
             return { ...msg, read: 1 };
           }
           return msg;
         });
+        console.log(`  📊 Обновлено ${changed ? 'есть изменения' : 'нет изменений'}`);
         return changed ? updated : prev;
       });
     } catch (error) {
       console.error('Error marking as read:', error);
     }
-  }, [userId]);
+  }, [userId, messages]);
 
   return {
     messages,

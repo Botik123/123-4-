@@ -9,8 +9,12 @@ export const useUsers = () => {
     setLoading(true);
     try {
       const data = await usersAPI.getAll();
+      console.log(`📥 fetchUsers: получено ${data.length} пользователей, фильтруем ${currentUserId}`);
       // Фильтруем текущего пользователя
-      setUsers(currentUserId ? data.filter(u => u.id !== currentUserId) : data);
+      const filtered = currentUserId ? data.filter(u => u.id !== currentUserId) : data;
+      console.log(`📥 После фильтрации: ${filtered.length} пользователей`);
+      filtered.forEach(u => console.log(`  - ${u.username} (${u.id})`));
+      setUsers(filtered);
     } catch (error) {
       console.error('Error fetching users:', error);
       setUsers([]);
@@ -29,19 +33,25 @@ export const useUsers = () => {
 
   // Обновление статуса пользователя (онлайн/оффлайн)
   const updateUserStatus = useCallback((userId, online, lastSeen) => {
-    console.log(`🔄 updateUserStatus: ${userId}, online=${online}`);
-    setUsers(prev => prev.map(u => {
-      if (u.id === userId) {
-        const newOnline = online === true || online === 'true' || online === 1;
-        console.log(`  📍 Обновляем: ${u.username} -> online=${newOnline}`);
-        return { 
-          ...u, 
-          online: newOnline,
-          last_seen: lastSeen || Date.now()
-        };
+    const newOnline = online === true || online === 'true' || online === 1;
+    console.log(`🔄 updateUserStatus: userId=${userId}, online=${newOnline}`);
+    setUsers(prev => {
+      const updated = prev.map(u => {
+        if (u.id === userId) {
+          console.log(`  ✅ Нашёл пользователя ${u.username}, обновляю online: ${u.online} -> ${newOnline}`);
+          return { 
+            ...u, 
+            online: newOnline,
+            last_seen: lastSeen || Date.now()
+          };
+        }
+        return u;
+      });
+      if (!prev.find(u => u.id === userId)) {
+        console.warn(`  ⚠️ Пользователь ${userId} не найден в списке (${prev.length} пользователей)`);
       }
-      return u;
-    }));
+      return updated;
+    });
   }, []);
 
   // Обновление статуса для конкретного пользователя (используется в Sidebar)

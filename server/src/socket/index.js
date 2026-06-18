@@ -276,18 +276,22 @@ const sendMessageToUser = (to, messageData) => {
 /**
  * Уведомить пользователя об изменении сообщения
  * @param {string} to - ID получателя
- * @param {string} type - Тип события (message_edited/message_deleted)
+ * @param {string} type - Тип события (message_edited/message_deleted/messages_read)
  * @param {object} data - Данные события
  */
 const notifyMessageUpdate = (to, type, data) => {
   const recipientWs = clients.get(to);
+  console.log(`📡 notifyMessageUpdate: to=${to}, type=${type}, clients.size=${clients.size}`);
+  console.log(`  📍 recipientWs: ${recipientWs ? 'найден' : 'НЕ НАЙДЕН'}, readyState=${recipientWs?.readyState}`);
   if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
     recipientWs.send(JSON.stringify({
       type: type,
       ...data
     }));
+    console.log(`  ✅ Уведомление отправлено`);
     return true;
   }
+  console.warn(`  ⚠️ Не удалось отправить уведомление`);
   return false;
 };
 

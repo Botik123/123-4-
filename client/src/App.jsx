@@ -85,16 +85,19 @@ function App() {
     },
     // Сообщения прочитаны (ответ от сервера)
     onMessagesRead: (data) => {
-      console.log(`📖 onMessagesRead: byUserId=${data.byUserId}, current user=${user?.id}`);
+      console.log(`📖 onMessagesRead: byUserId=${data.byUserId}, current user=${user?.id}, messages count=${messages.length}`);
       // Обновляем галочки у сообщений которые МЫ отправили и ИХ прочитали
       // data.byUserId - это кто прочитал (собеседник)
       // Используем updateMessage для каждого сообщения
+      let updatedCount = 0;
       messages.forEach(msg => {
         if (msg.from_user === user?.id && msg.to_user === data.byUserId && msg.read !== 1) {
-          console.log(`✅ Обновляем сообщение ${msg.id} как прочитанное`);
+          console.log(`  📩 Сообщение ${msg.id}: from=${msg.from_user}, to=${msg.to_user}, read=${msg.read} -> 1`);
           updateMessage(msg.id, { read: 1 });
+          updatedCount++;
         }
       });
+      console.log(`  ✅ Обновлено ${updatedCount} сообщений`);
     },
     // Реакция на сообщение (получена от другого пользователя)
     onReaction: (data) => {
@@ -308,7 +311,7 @@ function App() {
   // Автоматическое прочтение сообщений при получении
   const handleMarkAsRead = useCallback((fromUserId) => {
     if (!fromUserId || !user?.id) return;
-    console.log(`📖 Отмечаем сообщения от ${fromUserId} как прочитанные`);
+    console.log(`📖 handleMarkAsRead: fromUserId=${fromUserId}, user.id=${user.id}`);
     markAsRead(fromUserId);
   }, [user?.id, markAsRead]);
 
