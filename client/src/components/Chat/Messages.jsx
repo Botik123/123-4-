@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import Message from './Message';
 import DateDivider from '../Common/DateDivider';
+import Skeleton from '../Common/Skeleton';
 import { groupMessagesByDate } from '../../utils/helpers';
 
 const Messages = ({ 
@@ -10,12 +11,14 @@ const Messages = ({
   onForward, 
   onEdit, 
   onDelete, 
-  onReaction 
+  onReaction,
+  loading // 🔥 Добавляем пропс loading
 }) => {
   const messagesEndRef = useRef(null);
   const containerRef = useRef(null);
   const [userScrolled, setUserScrolled] = useState(false);
   const [prevMessagesLength, setPrevMessagesLength] = useState(messages.length);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   const isAtBottom = () => {
     const container = containerRef.current;
@@ -30,11 +33,21 @@ const Messages = ({
     }
   };
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (behavior = 'smooth') => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current.scrollIntoView({ behavior });
     }
   };
+
+  useEffect(() => {
+    if (messages.length > 0 && isFirstLoad) {
+      const timer = setTimeout(() => {
+        scrollToBottom('auto');
+        setIsFirstLoad(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [messages, isFirstLoad]);
 
   useEffect(() => {
     if (messages.length > prevMessagesLength) {
@@ -42,7 +55,7 @@ const Messages = ({
       const isOwnMessage = lastMsg && lastMsg.from_user === currentUserId;
       
       if (!userScrolled || isOwnMessage) {
-        scrollToBottom();
+        scrollToBottom('smooth');
       }
       
       setPrevMessagesLength(messages.length);
@@ -50,8 +63,35 @@ const Messages = ({
   }, [messages, currentUserId, userScrolled]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, []);
+    setIsFirstLoad(true);
+    setUserScrolled(false);
+  }, [currentUserId]);
+
+  // 🔥 ПОКАЗЫВАЕМ СКЕЛЕТОН ВО ВРЕМЯ ЗАГРУЗКИ
+  if (loading) {
+    return (
+      <div className="messages-container">
+        <div className="date-divider"><span>Загрузка...</span></div>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton 
+            key={i} 
+            type={i % 2 === 0 ? 'message-sent' : 'message-received'} 
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (messages.length === 0) {
+    return (
+      <div className="messages-container empty">
+        <div className="empty-chat-small">
+          <div className="empty-icon">💬</div>
+          <p>Нет сообщений. Начните диалог!</p>
+        </div>
+      </div>
+    );
+  }
 
   const groupedMessages = groupMessagesByDate(messages);
 

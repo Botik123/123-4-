@@ -952,40 +952,68 @@ body {
   font-style: italic;
   font-size: 14px;
 }
-
 /* ============================================
-   TYPING INDICATOR
+   TYPING INDICATOR (Анимированные точки)
    ============================================ */
-.typing-indicator {
+.typing-indicator-wrapper {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 16px 8px;
-  color: var(--tg-text-secondary);
-  font-size: 13px;
+  padding: 8px 16px 12px;
+  animation: fadeIn 0.3s ease;
 }
 
-.typing-indicator .dots {
+.typing-text {
+  font-size: 14px;
+  color: var(--tg-text-secondary);
+}
+
+.typing-dots {
   display: flex;
+  align-items: center;
   gap: 4px;
 }
 
-.typing-indicator .dots span {
+.typing-dots span {
   width: 6px;
   height: 6px;
-  background: var(--tg-primary);
+  background-color: var(--tg-text-secondary);
   border-radius: 50%;
-  animation: typingDot 1.4s infinite;
+  display: inline-block;
+  animation: typingBounce 1.4s infinite ease-in-out both;
 }
 
-.typing-indicator .dots span:nth-child(2) {
-  animation-delay: 0.2s;
+.typing-dots span:nth-child(1) {
+  animation-delay: -0.32s;
 }
 
-.typing-indicator .dots span:nth-child(3) {
-  animation-delay: 0.4s;
+.typing-dots span:nth-child(2) {
+  animation-delay: -0.16s;
 }
 
+.typing-dots span:nth-child(3) {
+  animation-delay: 0s;
+}
+
+@keyframes typingBounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Для тёмной темы */
+[data-theme="dark"] .typing-dots span {
+  background-color: var(--tg-text-secondary);
+}
+
+[data-theme="dark"] .typing-text {
+  color: var(--tg-text-secondary);
+}
 /* ============================================
    REPLY BAR
    ============================================ */
@@ -1879,4 +1907,110 @@ body {
     height: 36px;
     font-size: 16px;
   }
+}
+
+/* ============================================
+   SKELETON LOADING
+   ============================================ */
+.skeleton-chat-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  animation: fadeIn 0.3s ease;
+}
+
+.skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--tg-bg);
+  flex-shrink: 0;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skeleton-line {
+  height: 12px;
+  background: var(--tg-bg);
+  border-radius: 6px;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-line-title {
+  width: 70%;
+  height: 14px;
+}
+
+.skeleton-line-sub {
+  width: 40%;
+  height: 10px;
+}
+
+.skeleton-message {
+  display: flex;
+  margin-bottom: 12px;
+  animation: fadeIn 0.3s ease;
+}
+
+.skeleton-message.sent {
+  justify-content: flex-end;
+}
+
+.skeleton-message.received {
+  justify-content: flex-start;
+}
+
+.skeleton-bubble {
+  width: 180px;
+  height: 36px;
+  background: var(--tg-bg);
+  border-radius: 16px;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-message.sent .skeleton-bubble {
+  border-bottom-right-radius: 4px;
+}
+
+.skeleton-message.received .skeleton-bubble {
+  border-bottom-left-radius: 4px;
+}
+
+/* Skeleton текста */
+.skeleton-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.skeleton-text .skeleton-line {
+  height: 14px;
+  background: var(--tg-bg);
+  border-radius: 6px;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Тёмная тема для скелетонов */
+[data-theme="dark"] .skeleton-avatar,
+[data-theme="dark"] .skeleton-line,
+[data-theme="dark"] .skeleton-bubble,
+[data-theme="dark"] .skeleton-text .skeleton-line {
+  background: var(--tg-bg-dark);
 }

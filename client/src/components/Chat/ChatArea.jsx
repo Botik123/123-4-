@@ -23,7 +23,8 @@ const ChatArea = ({
   onSetReplyTo,
   isConnecting,
   onBack,
-  isMobileOpen
+  isMobileOpen,
+  loading // 🔥 Добавляем пропс
 }) => {
   if (!selectedUser) {
     return <EmptyChat />;
@@ -46,6 +47,7 @@ const ChatArea = ({
         onEdit={onEdit}
         onDelete={onDelete}
         onReaction={onReaction}
+        loading={loading} // 🔥 Передаём loading
       />
       
       {typing && <TypingIndicator username={selectedUser.username} />}

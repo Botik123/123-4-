@@ -290,6 +290,7 @@ function App() {
         isConnecting={isConnecting}
         onBack={handleBack}
         isMobileOpen={isMobileChatOpen}
+        loading={messagesLoading} // 🔥 Передаём состояние загрузки
       />
     </div>
   );

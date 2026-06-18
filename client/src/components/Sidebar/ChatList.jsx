@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import Avatar from '../Common/Avatar';
+import Skeleton from '../Common/Skeleton';
 import { formatLastSeen } from '../../utils/helpers';
 
 const ChatItem = memo(({ user, isSelected, onSelect }) => (
@@ -17,10 +18,22 @@ const ChatItem = memo(({ user, isSelected, onSelect }) => (
   </div>
 ));
 
-const ChatList = ({ users, selectedUserId, onSelectUser, searchQuery }) => {
+const ChatList = ({ users, selectedUserId, onSelectUser, searchQuery, loading }) => {
   const filteredUsers = users.filter(u =>
     u.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // 🔥 ПОКАЗЫВАЕМ СКЕЛЕТОН ВО ВРЕМЯ ЗАГРУЗКИ
+  if (loading) {
+    return (
+      <div className="chats-list">
+        <div className="section-title">Контакты</div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} type="chat-item" />
+        ))}
+      </div>
+    );
+  }
 
   if (filteredUsers.length === 0) {
     return (
