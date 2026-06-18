@@ -171,7 +171,7 @@ export const useWebSocket = ({
     send({ type: 'typing', to });
   }, [send]);
 
-  // 🔥 МЕТОДЫ ДЛЯ КОМНАТ — ЭТО ВАЖНО!
+  // 🔥 НОВЫЕ МЕТОДЫ ДЛЯ КОМНАТ
   const joinRoom = useCallback((chatId) => {
     console.log(`📌 Подписка на комнату: ${chatId}`);
     send({ type: 'join_room', chatId });
@@ -190,7 +190,7 @@ export const useWebSocket = ({
     };
   }, [cleanup]);
 
- 
+  // 🔥 ВОЗВРАЩАЕМ ВСЕ МЕТОДЫ, ВКЛЮЧАЯ joinRoom И leaveRoom
   return {
     isConnecting,
     isConnected,

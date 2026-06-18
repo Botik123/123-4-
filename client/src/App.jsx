@@ -44,13 +44,14 @@ function App() {
     markAsRead
   } = useMessages(user?.id, selectedUser?.id);
   
+  // 🔥 ТЕПЕРЬ joinRoom И leaveRoom ДОСТУПНЫ
   const {
     isConnecting,
     sendTyping,
     connect,
     disconnect,
     joinRoom,
-    leavRoom
+    leaveRoom
   } = useWebSocket({
     onMessage: (data) => {
       addMessage(data);
@@ -120,7 +121,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  
+  // 🔥 ТЕПЕРЬ joinRoom И leaveRoom РАБОТАЮТ
   useEffect(() => {
     if (selectedUser && user) {
       const chatId = [user.id, selectedUser.id].sort().join('_');
@@ -134,7 +135,7 @@ function App() {
     }
     
     return () => {
-     if (currentChatId) {
+      if (currentChatId) {
         leaveRoom(currentChatId);
       }
     };
