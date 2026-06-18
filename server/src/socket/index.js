@@ -73,8 +73,12 @@ const setupWebSocket = (server) => {
 
           // Уведомляем всех о статусе пользователя
           broadcastStatus(currentUserId, true);
-          broadcastOnlineUsers();
+          
+          // Отправляем текущему пользователю статусы всех кто уже онлайн
           sendAllStatuses(ws);
+          
+          // Уведомляем всех о списке онлайн (обновление)
+          broadcastOnlineUsers();
           
           console.log(`✅ Пользователь ${currentUserId} авторизован (клиентов: ${clients.size})`);
           return;
@@ -336,6 +340,7 @@ const sendAllStatuses = (ws) => {
     last_seen: Date.now()
   }));
 
+  console.log(`📡 sendAllStatuses: отправляем ${statuses.length} статусов`);
   statuses.forEach(status => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({
@@ -344,6 +349,7 @@ const sendAllStatuses = (ws) => {
         online: status.online,
         last_seen: status.last_seen
       }));
+      console.log(`  📍 Отправлен статус: ${status.userId} -> онлайн`);
     }
   });
 };
@@ -362,7 +368,7 @@ const broadcastStatus = (userId, isOnline) => {
   });
 
   clients.forEach((client, clientId) => {
-    // Не отправляем самому пользователю
+    // Отправляем всем КРОМЕ самого пользователя
     if (clientId !== userId && client.readyState === WebSocket.OPEN) {
       client.send(statusMessage);
     }
@@ -379,6 +385,7 @@ const broadcastOnlineUsers = () => {
     users: onlineUsers
   });
 
+  console.log(`📡 broadcastOnlineUsers: ${onlineUsers.length} онлайн`, onlineUsers);
   clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);

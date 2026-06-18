@@ -115,9 +115,28 @@ function App() {
     },
     // Изменение статуса пользователя (онлайн/оффлайн) - от WebSocket
     onStatus: (data) => {
-      console.log(`📡 onStatus: userId=${data.userId}, online=${data.online}`);
-      // Обновляем в списке пользователей
-      updateUserStatus(data.userId, data.online, data.last_seen);
+      console.log(`📡 onStatus: userId=${data.userId}, online=${data.online}, users.length=${users.length}`);
+      
+      // Обновляем через setUsers напрямую чтобы работало даже до загрузки users
+      setUsers(prev => {
+        if (!prev || prev.length === 0) {
+          console.warn('⚠️ onStatus: users is empty');
+          return prev || [];
+        }
+        const updated = prev.map(u => {
+          if (u.id === data.userId) {
+            console.log(`  ✅ Обновляем ${u.username}: ${u.online} -> ${data.online}`);
+            return {
+              ...u,
+              online: data.online,
+              last_seen: data.last_seen || Date.now()
+            };
+          }
+          return u;
+        });
+        return updated;
+      });
+      
       // Обновляем selectedUser если это он
       if (selectedUser && selectedUser.id === data.userId) {
         setSelectedUser(prev => prev ? {
@@ -139,21 +158,30 @@ function App() {
     onOnlineUsers: (onlineUserIds) => {
       console.log(`📡 onOnlineUsers:`, onlineUserIds, `users.length=${users.length}`);
       
-      // Если users ещё не загружен - пропускаем (обновится при загрузке)
-      if (!users || users.length === 0) {
-        console.warn('⚠️ onOnlineUsers: users is empty, skipping');
-        return;
-      }
-      
       const onlineSet = new Set(onlineUserIds);
       
-      // Обновляем статусы всех пользователей через updateUserStatus
-      users.forEach(u => {
-        if (u.id !== user?.id) {
-          const isOnline = onlineSet.has(u.id);
-          console.log(`  📍 ${u.username}: ${u.online} -> ${isOnline}`);
-          updateUserStatus(u.id, isOnline, isOnline ? Date.now() : u.last_seen);
+      // Обновляем через setUsers напрямую
+      setUsers(prev => {
+        if (!prev || prev.length === 0) {
+          console.warn('⚠️ onOnlineUsers: users is empty');
+          return prev || [];
         }
+        
+        const updated = prev.map(u => {
+          if (u.id !== user?.id) {
+            const isOnline = onlineSet.has(u.id);
+            console.log(`  📍 ${u.username}: ${u.online} -> ${isOnline}`);
+            return {
+              ...u,
+              online: isOnline,
+              last_seen: isOnline ? Date.now() : u.last_seen
+            };
+          }
+          return u;
+        });
+        
+        console.log(`  ✅ Обновлено статусов: ${updated.length}`);
+        return updated;
       });
       
       // Обновляем selectedUser
@@ -175,8 +203,9 @@ function App() {
   useEffect(() => {
     if (user && !isConnectingRef.current) {
       isConnectingRef.current = true;
-      connect(user.id);
+      // Сначала загружаем пользователей, потом подключаем WebSocket
       fetchUsers(user.id);
+      connect(user.id);
     }
     return () => {
       if (user) {
