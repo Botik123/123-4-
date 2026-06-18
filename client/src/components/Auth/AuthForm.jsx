@@ -32,32 +32,52 @@ const AuthForm = ({ onLogin, onRegister, loading }) => {
 
   return (
     <div className="auth-container">
+      <div className="auth-particles">
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+        <div className="particle"></div>
+      </div>
+      
       <div className="auth-box">
-        <div className="logo">💬</div>
+        <div className="auth-logo-wrapper">
+          <div className="auth-logo">💬</div>
+        </div>
         <h2>{isLogin ? 'Добро пожаловать' : 'Создать аккаунт'}</h2>
         <p className="subtitle">
           {isLogin ? 'Войдите в свой аккаунт' : 'Зарегистрируйтесь и начните общение'}
         </p>
         
         <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="Имя пользователя"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            disabled={loading}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Пароль"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
-            required
-          />
-          <button type="submit" disabled={loading}>
-            {loading ? '⏳ Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
+          <div className="input-group">
+            <span className="input-icon">👤</span>
+            <input
+              type="text"
+              placeholder="Имя пользователя"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={loading}
+              required
+            />
+          </div>
+          <div className="input-group">
+            <span className="input-icon">🔒</span>
+            <input
+              type="password"
+              placeholder="Пароль"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              required
+            />
+          </div>
+          <button type="submit" className="auth-btn" disabled={loading}>
+            {loading ? (
+              <span className="btn-loader"></span>
+            ) : (
+              isLogin ? 'Войти' : 'Зарегистрироваться'
+            )}
           </button>
         </form>
 
