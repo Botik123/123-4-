@@ -5,13 +5,15 @@ export const useUsers = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (currentUserId) => {
     setLoading(true);
     try {
       const data = await usersAPI.getAll();
-      setUsers(data);
+      // Фильтруем текущего пользователя
+      setUsers(currentUserId ? data.filter(u => u.id !== currentUserId) : data);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -19,6 +21,7 @@ export const useUsers = () => {
 
   const addUser = useCallback((user) => {
     setUsers(prev => {
+      // Не добавляем пользователя если он уже есть или это текущий пользователь
       if (prev.find(u => u.id === user.id)) return prev;
       return [...prev, user];
     });

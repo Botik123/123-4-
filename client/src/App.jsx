@@ -98,15 +98,20 @@ function App() {
     },
     // Новый пользователь зарегистрировался
     onNewUser: (data) => {
-      addUser(data.user);
+      // Не добавляем текущего пользователя
+      if (data.user?.id !== user?.id) {
+        addUser(data.user);
+      }
     },
     // Список онлайн пользователей
     onOnlineUsers: (onlineUserIds) => {
       const onlineSet = new Set(onlineUserIds);
       
-      // Обновляем статусы всех пользователей
+      // Обновляем статусы всех пользователей кроме текущего
       users.forEach(u => {
-        updateUserStatus(u.id, onlineSet.has(u.id), onlineSet.has(u.id) ? Date.now() : u.last_seen);
+        if (u.id !== user?.id) {
+          updateUserStatus(u.id, onlineSet.has(u.id), onlineSet.has(u.id) ? Date.now() : u.last_seen);
+        }
       });
       
       if (selectedUser) {
@@ -127,7 +132,7 @@ function App() {
     if (user && !isConnectingRef.current) {
       isConnectingRef.current = true;
       connect(user.id);
-      fetchUsers();
+      fetchUsers(user.id);
     }
     return () => {
       if (user) {

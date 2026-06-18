@@ -16,6 +16,9 @@ const Sidebar = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileOpen, setIsMobileOpen] = useState(true);
 
+  // Фильтруем текущего пользователя из списка контактов
+  const filteredUsers = users.filter(u => u.id !== user?.id);
+
   return (
     <div className={`sidebar ${isMobileOpen ? 'open' : 'closed'}`}>
       <UserProfile 
@@ -28,7 +31,7 @@ const Sidebar = ({
       />
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
       <ChatList 
-        users={users}
+        users={filteredUsers}
         selectedUserId={selectedUser?.id}
         onSelectUser={(user) => {
           onSelectUser(user);
