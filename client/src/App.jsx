@@ -39,6 +39,8 @@ function App() {
   
   // Хранилище статусов (применяются после загрузки users)
   const pendingStatuses = useRef(new Map());
+  // Хранилище онлайн ID из onOnlineUsers
+  const onlineUserIds = useRef(new Set());
   
   // === MESSAGES HOOK ===
   const {
@@ -120,12 +122,18 @@ function App() {
     onStatus: (data) => {
       console.log(`📡 onStatus: userId=${data.userId}, online=${data.online}, users.length=${users.length}`);
       
-      // Сохраняем статус в pending
-      pendingStatuses.current.set(data.userId, {
-        online: data.online,
-        last_seen: data.last_seen || Date.now()
-      });
-      console.log(`  📝 Сохранён pending статус: ${data.userId} -> ${data.online}`);
+      // Сохраняем в onlineUserIds
+      if (data.online) {
+        onlineUserIds.current.add(data.userId);
+      } else {
+        onlineUserIds.current.delete(data.userId);
+      }
+      console.log(`  📝 onlineUserIds: ${Array.from(onlineUserIds.current)}`);
+      
+      // Применяем если users загружен
+      if (users && users.length > 0) {
+        applyOnlineStatuses(users);
+      }
       
       // Обновляем selectedUser если это он
       if (selectedUser && selectedUser.id === data.userId) {
@@ -148,29 +156,55 @@ function App() {
     onOnlineUsers: (onlineUserIds) => {
       console.log(`📡 onOnlineUsers:`, onlineUserIds, `users.length=${users.length}`);
       
-      const onlineSet = new Set(onlineUserIds);
+      // Сохраняем онлайн ID
+      onlineUserIds.current = new Set(onlineUserIds);
+      console.log(`  📝 Сохранено ${onlineUserIds.length} онлайн ID`);
       
-      // Сохраняем все статусы в pending
-      onlineUserIds.forEach(id => {
-        pendingStatuses.current.set(id, { online: true, last_seen: Date.now() });
-      });
-      // Пользователи не в списке - оффлайн
-      users.forEach(u => {
-        if (!onlineSet.has(u.id)) {
-          pendingStatuses.current.set(u.id, { online: false, last_seen: Date.now() });
-        }
-      });
+      // Применяем если users уже загружен
+      if (users && users.length > 0) {
+        applyOnlineStatuses(users);
+      }
       
       // Обновляем selectedUser
       if (selectedUser) {
         setSelectedUser(prev => prev ? {
           ...prev,
-          online: onlineSet.has(prev.id),
-          last_seen: onlineSet.has(prev.id) ? Date.now() : prev.last_seen
+          online: onlineUserIds.current.has(prev.id),
+          last_seen: onlineUserIds.current.has(prev.id) ? Date.now() : prev.last_seen
         } : null);
       }
     }
   });
+
+  // Применить онлайн статусы
+  const applyOnlineStatuses = useCallback((usersList) => {
+    if (!usersList || usersList.length === 0) return;
+    
+    console.log(`🔄 applyOnlineStatuses: ${onlineUserIds.current.size} онлайн для ${usersList.length} пользователей`);
+    
+    setUsers(prev => {
+      if (!prev || prev.length === 0) return prev;
+      
+      const updated = prev.map(u => {
+        const isOnline = onlineUserIds.current.has(u.id);
+        // Не обновляем текущего пользователя
+        if (u.id === user?.id) return u;
+        
+        if (u.online !== isOnline) {
+          console.log(`  📍 ${u.username}: ${u.online} -> ${isOnline}`);
+          return {
+            ...u,
+            online: isOnline,
+            last_seen: isOnline ? Date.now() : u.last_seen
+          };
+        }
+        return u;
+      });
+      
+      console.log(`  ✅ Статусы применены`);
+      return updated;
+    });
+  }, [user?.id]);
 
   // ==========================================
   // === EFFECTS: ЖИЗНЕННЫЙ ЦИКЛ ===
@@ -193,40 +227,15 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Применяем pending статусы после загрузки users
+  // Применяем статусы после загрузки users
   useEffect(() => {
-    console.log(`🔄 useEffect users: length=${users?.length || 0}, pending.size=${pendingStatuses.current.size}`);
+    console.log(`🔄 useEffect users: length=${users?.length || 0}, onlineIds.size=${onlineUserIds.current.size}`);
     
-    if (users && users.length > 0 && pendingStatuses.current.size > 0) {
-      console.log(`🔄 users загружен (${users.length}), применяем ${pendingStatuses.current.size} pending статусов`);
-      
-      setUsers(prev => {
-        if (!prev || prev.length === 0) {
-          console.warn('⚠️ prev users is empty');
-          return prev;
-        }
-        
-        const updated = prev.map(u => {
-          const pending = pendingStatuses.current.get(u.id);
-          if (pending && u.id !== user?.id) {
-            console.log(`  📍 ${u.username} (${u.id}): ${u.online} -> ${pending.online}`);
-            return {
-              ...u,
-              online: pending.online,
-              last_seen: pending.last_seen || u.last_seen
-            };
-          }
-          return u;
-        });
-        
-        console.log(`  ✅ Обновлён массив users (${updated.length} элементов)`);
-        pendingStatuses.current.clear();
-        return updated;
-      });
-    } else {
-      console.warn(`⚠️ useEffect: users.length=${users?.length}, pending.size=${pendingStatuses.current.size} - пропускаем`);
+    if (users && users.length > 0 && onlineUserIds.current.size > 0) {
+      console.log(`🔄 users загружен (${users.length}), применяем статусы`);
+      applyOnlineStatuses(users);
     }
-  }, [users, user?.id]);
+  }, [users, applyOnlineStatuses]);
 
   // Загрузка истории сообщений при выборе пользователя
   useEffect(() => {
