@@ -4,11 +4,9 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../db/queries');
 const { generateToken } = require('../middleware/auth');
 const { sanitizeBody } = require('../middleware/sanitize');
-const redis = require('../redis');
 
 const router = express.Router();
 
-// Регистрация
 router.post('/register', sanitizeBody, async (req, res) => {
   const { username, password } = req.body;
 
@@ -52,7 +50,6 @@ router.post('/register', sanitizeBody, async (req, res) => {
   }
 });
 
-// Логин
 router.post('/login', sanitizeBody, async (req, res) => {
   const { username, password } = req.body;
 
@@ -72,9 +69,6 @@ router.post('/login', sanitizeBody, async (req, res) => {
     }
 
     const token = generateToken(user.id);
-
-    // Обновляем last_seen в Redis
-    await redis.set(`user:${user.id}:last_seen`, Date.now());
 
     res.json({
       token,

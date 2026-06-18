@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { parseFileMessage, getReplyPreview, getCleanText, escapeHtml, getMessagePreview } from '../../utils/helpers';
+import React, { memo, useState } from 'react';
+import { parseFileMessage, getReplyPreview, getCleanText, escapeHtml } from '../../utils/helpers';
 import { REACTIONS_LIST } from '../../utils/constants';
 
 // Рендер файлового сообщения
@@ -76,11 +76,13 @@ const renderMessageContent = (msg) => {
     return <span className="deleted-message">🗑️ Сообщение удалено</span>;
   }
 
+  // Проверяем, является ли сообщение файлом
   const fileData = parseFileMessage(msg.text);
   if (fileData && fileData.type !== 'deleted') {
     return renderFileMessage(fileData);
   }
 
+  // Проверяем, есть ли ответ
   const replyPreview = getReplyPreview(msg.text);
   const cleanText = getCleanText(msg.text);
 
@@ -100,16 +102,14 @@ const renderMessageContent = (msg) => {
   );
 };
 
-const Message = ({ 
+const Message = memo(({ 
   message, 
   isOwn, 
   onReply, 
   onForward, 
   onEdit, 
   onDelete, 
-  onReaction,
-  showReactions,
-  setShowReactions
+  onReaction 
 }) => {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   
@@ -117,16 +117,35 @@ const Message = ({
   const msgReactions = message.reactions || {};
   const reactionEntries = Object.entries(msgReactions);
 
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit(message);
+    }
+  };
+
+  const handleDelete = () => {
+    if (onDelete && window.confirm('Удалить сообщение?')) {
+      onDelete(message.id);
+    }
+  };
+
+  const handleReaction = (reaction) => {
+    if (onReaction) {
+      onReaction(message.id, reaction);
+    }
+    setShowReactionPicker(false);
+  };
+
   return (
     <div className={`message ${isOwn ? 'sent' : 'received'} ${isDeleted ? 'deleted' : ''}`}>
       <div className="message-wrapper">
         {/* Message Actions */}
         {!isDeleted && (
           <div className="message-actions">
-            <button onClick={() => onReply(message)} title="Ответить">↩️</button>
-            <button onClick={() => onForward(message)} title="Переслать">📎</button>
+            <button onClick={() => onReply?.(message)} title="Ответить">↩️</button>
+            <button onClick={() => onForward?.(message)} title="Переслать">📎</button>
             {isOwn && (
-              <button onClick={() => onEdit(message)} title="Редактировать">✏️</button>
+              <button onClick={handleEdit} title="Редактировать">✏️</button>
             )}
             <button 
               onClick={() => setShowReactionPicker(!showReactionPicker)} 
@@ -135,7 +154,7 @@ const Message = ({
               😊
             </button>
             {isOwn && (
-              <button onClick={() => onDelete(message.id)} title="Удалить">🗑️</button>
+              <button onClick={handleDelete} title="Удалить">🗑️</button>
             )}
           </div>
         )}
@@ -144,10 +163,7 @@ const Message = ({
         {!isDeleted && showReactionPicker && (
           <div className="reactions-picker">
             {REACTIONS_LIST.map(r => (
-              <button key={r} onClick={() => {
-                onReaction(message.id, r);
-                setShowReactionPicker(false);
-              }}>
+              <button key={r} onClick={() => handleReaction(r)}>
                 {r}
               </button>
             ))}
@@ -179,6 +195,6 @@ const Message = ({
       </div>
     </div>
   );
-};
+});
 
 export default Message;

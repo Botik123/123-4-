@@ -1,3 +1,5 @@
+import { API_URL } from './constants';
+
 // Цвет аватара
 export const getAvatarColor = (name) => {
   if (!name) return '#667eea';
@@ -17,6 +19,29 @@ export const escapeHtml = (text) => {
   return div.innerHTML;
 };
 
+// Формат времени "был(а)"
+export const formatLastSeen = (timestamp) => {
+  if (!timestamp) return 'Не в сети';
+  
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  if (minutes < 1) return 'Только что';
+  if (minutes < 60) return `${minutes} мин назад`;
+  if (hours < 24) return `${hours} ч назад`;
+  if (days === 1) return 'Вчера';
+  if (days < 7) return `${days} дн назад`;
+  
+  return new Date(timestamp).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+};
+
 // Парсинг файлового сообщения
 export const parseFileMessage = (text) => {
   if (!text) return null;
@@ -25,34 +50,41 @@ export const parseFileMessage = (text) => {
     return { type: 'deleted' };
   }
   
-  const imageMatch = text.match(/📷 Изображение: (http:\/\/localhost:3001\/uploads\/[^\s]+)/);
+  // Изображение
+  const imageMatch = text.match(/📷 Изображение: (https?:\/\/[^\s]+)/);
   if (imageMatch) {
     return { type: 'image', url: imageMatch[1] };
   }
   
-  const audioMatch = text.match(/🎵 Аудио: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
+  // Аудио
+  const audioMatch = text.match(/🎵 Аудио: ([^\n]+)/);
   if (audioMatch) {
-    const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
+    const urlMatch = audioMatch[1].match(/https?:\/\/[^\s]+/);
+    const name = audioMatch[1].replace(/https?:\/\/[^\s]+/, '').trim();
     if (urlMatch) {
-      return { type: 'audio', name: audioMatch[1].trim(), url: urlMatch[0] };
+      return { type: 'audio', name: name || 'Аудио', url: urlMatch[0] };
     }
     return { type: 'audio', name: audioMatch[1].trim(), url: null };
   }
   
-  const videoMatch = text.match(/🎬 Видео: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
+  // Видео
+  const videoMatch = text.match(/🎬 Видео: ([^\n]+)/);
   if (videoMatch) {
-    const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
+    const urlMatch = videoMatch[1].match(/https?:\/\/[^\s]+/);
+    const name = videoMatch[1].replace(/https?:\/\/[^\s]+/, '').trim();
     if (urlMatch) {
-      return { type: 'video', name: videoMatch[1].trim(), url: urlMatch[0] };
+      return { type: 'video', name: name || 'Видео', url: urlMatch[0] };
     }
     return { type: 'video', name: videoMatch[1].trim(), url: null };
   }
   
-  const fileMatch = text.match(/📎 Файл: ([^\s]+(?:\s[^\s]+)*?)\s*(?:http:\/\/localhost:3001\/uploads\/[^\s]+)?$/);
+  // Файл
+  const fileMatch = text.match(/📎 Файл: ([^\n]+)/);
   if (fileMatch) {
-    const urlMatch = text.match(/http:\/\/localhost:3001\/uploads\/[^\s]+/);
+    const urlMatch = fileMatch[1].match(/https?:\/\/[^\s]+/);
+    const name = fileMatch[1].replace(/https?:\/\/[^\s]+/, '').trim();
     if (urlMatch) {
-      return { type: 'file', name: fileMatch[1].trim(), url: urlMatch[0] };
+      return { type: 'file', name: name || 'Файл', url: urlMatch[0] };
     }
     return { type: 'file', name: fileMatch[1].trim(), url: null };
   }

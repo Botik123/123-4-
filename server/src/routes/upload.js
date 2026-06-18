@@ -9,7 +9,6 @@ const config = require('../config');
 
 const router = express.Router();
 
-// Создаём папку для загрузок
 const uploadDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -42,7 +41,6 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     if (file.mimetype.startsWith('image/')) {
       fileType = 'image';
-      // Создаём миниатюру
       try {
         const thumbnailPath = path.join(uploadDir, `thumb_${file.filename}`);
         await sharp(file.path).resize(200, 200, { fit: 'inside' }).toFile(thumbnailPath);

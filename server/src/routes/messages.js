@@ -7,7 +7,6 @@ const { sendMessageToUser, notifyMessageUpdate, broadcastReaction } = require('.
 
 const router = express.Router();
 
-// Все роуты требуют авторизации
 router.use(authMiddleware);
 
 // Получить историю сообщений
@@ -28,15 +27,19 @@ router.get('/:userId/:otherUserId', async (req, res) => {
 router.post('/', sanitizeBody, async (req, res) => {
   const { to, text, reply_to } = req.body;
 
-  if (!to || !text || text.trim() === '') {
-    return res.status(400).json({ error: 'Неверные данные' });
+  if (!to) {
+    return res.status(400).json({ error: 'Не указан получатель' });
+  }
+
+  if (!text || text.trim() === '') {
+    return res.status(400).json({ error: 'Сообщение не может быть пустым' });
   }
 
   try {
     const messageId = uuidv4();
     const timestamp = Date.now();
 
-    const message = await db.createMessage(
+    await db.createMessage(
       messageId,
       req.userId,
       to,
@@ -46,8 +49,7 @@ router.post('/', sanitizeBody, async (req, res) => {
       null
     );
 
-    // Отправляем сообщение получателю через WebSocket
-    const delivered = sendMessageToUser(req.userId, to, {
+    const messageData = {
       id: messageId,
       from: req.userId,
       to: to,
@@ -55,15 +57,18 @@ router.post('/', sanitizeBody, async (req, res) => {
       timestamp: timestamp,
       read: 0,
       reply_to: reply_to || null
-    });
+    };
+
+    const delivered = sendMessageToUser(to, messageData);
 
     res.json({
-      ...message,
+      id: messageId,
+      ...messageData,
       delivered
     });
 
   } catch (error) {
-    console.error('Error sending message:', error);
+    console.error('❌ Ошибка отправки сообщения:', error);
     res.status(500).json({ error: 'Ошибка отправки сообщения' });
   }
 });
@@ -76,6 +81,10 @@ router.put('/:messageId', sanitizeBody, async (req, res) => {
     return res.status(400).json({ error: 'Сообщение не может быть пустым' });
   }
 
+  if (!to) {
+    return res.status(400).json({ error: 'Не указан получатель' });
+  }
+
   try {
     const result = await db.editMessage(req.params.messageId, text.trim());
 
@@ -83,7 +92,6 @@ router.put('/:messageId', sanitizeBody, async (req, res) => {
       return res.status(404).json({ error: 'Сообщение не найдено' });
     }
 
-    // Уведомляем получателя
     notifyMessageUpdate(to, 'message_edited', {
       messageId: req.params.messageId,
       text: text.trim(),
@@ -113,7 +121,6 @@ router.delete('/:messageId', async (req, res) => {
       return res.status(404).json({ error: 'Сообщение не найдено' });
     }
 
-    // Уведомляем получателя
     notifyMessageUpdate(to, 'message_deleted', {
       messageId: req.params.messageId
     });
@@ -135,13 +142,42 @@ router.post('/forward', sanitizeBody, async (req, res) => {
   }
 
   try {
-    // Получаем оригинальное сообщение
-    // TODO: Добавить запрос на получение сообщения по ID
+    const originalMessage = await db.getMessageById(messageId);
+    
+    if (!originalMessage) {
+      return res.status(404).json({ error: 'Сообщение не найдено' });
+    }
 
-    // Создаём пересланное сообщение
-    // TODO: Реализовать
+    const newMessageId = uuidv4();
+    const timestamp = Date.now();
+    
+    const forwardedText = `📎 Переслано: ${originalMessage.text}`;
 
-    res.json({ success: true });
+    await db.createMessage(
+      newMessageId,
+      req.userId,
+      to,
+      forwardedText,
+      timestamp,
+      null,
+      originalMessage.from_user
+    );
+
+    const delivered = sendMessageToUser(to, {
+      id: newMessageId,
+      from: req.userId,
+      to: to,
+      text: forwardedText,
+      timestamp: timestamp,
+      read: 0,
+      forwarded_from: originalMessage.from_user
+    });
+
+    res.json({ 
+      id: newMessageId, 
+      delivered,
+      forwarded_from: originalMessage.from_user
+    });
 
   } catch (error) {
     console.error('Error forwarding message:', error);
@@ -161,7 +197,6 @@ router.post('/reaction', async (req, res) => {
     const id = uuidv4();
     await db.addReaction(id, messageId, req.userId, reaction);
 
-    // Уведомляем получателя
     broadcastReaction(messageId, req.userId, reaction, to);
 
     res.json({ success: true });

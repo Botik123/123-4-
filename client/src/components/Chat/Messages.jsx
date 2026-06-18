@@ -23,11 +23,11 @@ const Messages = ({
   return (
     <div className="messages-container">
       {groupedMessages.map((group, index) => (
-        <React.Fragment key={index}>
+        <React.Fragment key={`group-${index}-${group.date}`}>
           <DateDivider date={group.date} />
           {group.messages.map(msg => (
             <Message
-              key={msg.id}
+              key={msg.id || `msg-${Math.random()}`}
               message={msg}
               isOwn={msg.from_user === currentUserId}
               onReply={onReply}

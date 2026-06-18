@@ -4,7 +4,7 @@ const path = require('path');
 const db = new sqlite3.Database(path.join(__dirname, '../../messenger.db'));
 
 db.serialize(() => {
-  // Пользователи
+  // Таблица пользователей
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -15,7 +15,7 @@ db.serialize(() => {
     )
   `);
 
-  // Сообщения
+  // Таблица сообщений
   db.run(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -28,13 +28,11 @@ db.serialize(() => {
       edited_at INTEGER,
       reply_to TEXT,
       forwarded_from TEXT,
-      deleted INTEGER DEFAULT 0,
-      FOREIGN KEY(from_user) REFERENCES users(id),
-      FOREIGN KEY(to_user) REFERENCES users(id)
+      deleted INTEGER DEFAULT 0
     )
   `);
 
-  // Реакции
+  // Таблица реакций
   db.run(`
     CREATE TABLE IF NOT EXISTS message_reactions (
       id TEXT PRIMARY KEY,

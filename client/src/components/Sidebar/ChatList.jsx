@@ -1,5 +1,21 @@
-import React from 'react';
+import React, { memo } from 'react';
 import Avatar from '../Common/Avatar';
+import { formatLastSeen } from '../../utils/helpers';
+
+const ChatItem = memo(({ user, isSelected, onSelect }) => (
+  <div
+    className={`chat-item ${isSelected ? 'active' : ''}`}
+    onClick={() => onSelect(user)}
+  >
+    <Avatar name={user.username} size="medium" online={user.online} />
+    <div className="chat-info">
+      <div className="chat-name">{user.username}</div>
+      <div className="chat-last-msg">
+        {user.online ? '🟢 В сети' : `⚫ ${formatLastSeen(user.last_seen)}`}
+      </div>
+    </div>
+  </div>
+));
 
 const ChatList = ({ users, selectedUserId, onSelectUser, searchQuery }) => {
   const filteredUsers = users.filter(u =>
@@ -20,24 +36,12 @@ const ChatList = ({ users, selectedUserId, onSelectUser, searchQuery }) => {
     <div className="chats-list">
       <div className="section-title">Контакты</div>
       {filteredUsers.map(user => (
-        <div
+        <ChatItem
           key={user.id}
-          className={`chat-item ${selectedUserId === user.id ? 'active' : ''}`}
-          onClick={() => onSelectUser(user)}
-        >
-          <Avatar name={user.username} size="medium" online={user.online} />
-          <div className="chat-info">
-            <div className="chat-name">{user.username}</div>
-            <div className="chat-last-msg">
-              {user.online ? '🟢 В сети' : '⚫ Не в сети'}
-            </div>
-          </div>
-          <div className="chat-meta">
-            <div className="chat-time">
-              {user.last_seen ? new Date(user.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-            </div>
-          </div>
-        </div>
+          user={user}
+          isSelected={selectedUserId === user.id}
+          onSelect={onSelectUser}
+        />
       ))}
     </div>
   );

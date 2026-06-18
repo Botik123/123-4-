@@ -17,7 +17,6 @@ export const useWebSocket = ({
   const maxReconnectAttempts = 3;
   const isMounted = useRef(true);
 
-  // Очистка ресурсов
   const cleanup = useCallback(() => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
@@ -26,9 +25,7 @@ export const useWebSocket = ({
     if (wsRef.current) {
       try {
         wsRef.current.close(1000, 'Cleanup');
-      } catch (e) {
-        // Игнорируем ошибки закрытия
-      }
+      } catch (e) {}
       wsRef.current = null;
     }
     setIsConnected(false);
@@ -36,31 +33,24 @@ export const useWebSocket = ({
   }, []);
 
   const connect = useCallback((userId) => {
-    // Если компонент размонтирован
-    if (!isMounted.current) return;
-
-    // Если уже есть открытое соединение
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       console.log('✅ WebSocket уже подключен');
       return;
     }
 
-    // Если соединение устанавливается
     if (isConnecting) {
       console.log('⏳ Уже в процессе подключения');
       return;
     }
 
-    // Проверяем токен
     const token = localStorage.getItem('token');
     if (!token) {
       console.warn('⚠️ Нет токена');
       return;
     }
 
-    // Если превышено количество попыток
     if (reconnectAttempts.current >= maxReconnectAttempts) {
-      console.warn('⚠️ Превышено количество попыток переподключения');
+      console.warn('⚠️ Достигнут лимит попыток');
       return;
     }
 
@@ -74,25 +64,17 @@ export const useWebSocket = ({
 
       socket.onopen = () => {
         if (!isMounted.current) return;
-        
         console.log('✅ WebSocket connected');
         setIsConnecting(false);
         setIsConnected(true);
         reconnectAttempts.current = 0;
-        
-        // Отправляем токен
-        socket.send(JSON.stringify({ 
-          type: 'auth', 
-          token: token 
-        }));
+        socket.send(JSON.stringify({ type: 'auth', token: token }));
       };
 
       socket.onmessage = (event) => {
         if (!isMounted.current) return;
-        
         try {
           const data = JSON.parse(event.data);
-          console.log('📩 Получено:', data.type);
           
           switch (data.type) {
             case 'auth_success':
@@ -120,7 +102,7 @@ export const useWebSocket = ({
               console.error('❌ Server error:', data.message);
               break;
             default:
-              console.log('📨 Неизвестный тип:', data.type);
+              break;
           }
         } catch (error) {
           console.error('❌ Error parsing message:', error);
@@ -129,33 +111,12 @@ export const useWebSocket = ({
 
       socket.onclose = (event) => {
         if (!isMounted.current) return;
-        
-        console.log(`🔌 WebSocket disconnected: ${event.code} - ${event.reason || 'Без причины'}`);
+        console.log(`🔌 WebSocket disconnected: ${event.code}`);
         setIsConnected(false);
         setIsConnecting(false);
         
-        // Не переподключаемся при нормальном закрытии
-        if (event.code === 1000 || event.code === 1001) {
-          console.log('✅ Нормальное закрытие');
+        if (event.code === 1000 || event.code === 1001 || event.code === 1006) {
           return;
-        }
-
-        // Переподключение с ограничением
-        if (reconnectAttempts.current < maxReconnectAttempts) {
-          const delay = 5000 * reconnectAttempts.current; // 5, 10, 15 секунд
-          console.log(`🔄 Переподключение через ${delay}ms...`);
-          
-          if (reconnectTimerRef.current) {
-            clearTimeout(reconnectTimerRef.current);
-          }
-          
-          reconnectTimerRef.current = setTimeout(() => {
-            if (isMounted.current && localStorage.getItem('token')) {
-              connect(userId);
-            }
-          }, delay);
-        } else {
-          console.error('❌ Достигнут лимит попыток переподключения');
         }
       };
 
@@ -191,7 +152,6 @@ export const useWebSocket = ({
     send({ type: 'typing', to });
   }, [send]);
 
-  // Очистка при размонтировании
   useEffect(() => {
     isMounted.current = true;
     return () => {

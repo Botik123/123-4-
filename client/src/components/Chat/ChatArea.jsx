@@ -18,6 +18,7 @@ const ChatArea = ({
   onDelete,
   onReaction,
   onSendMessage,
+  onFileSend,
   onTyping,
   onSetReplyTo,
   isConnecting
@@ -55,6 +56,7 @@ const ChatArea = ({
       
       <MessageInput 
         onSend={onSendMessage}
+        onFileSend={onFileSend}
         onTyping={onTyping}
         disabled={isConnecting}
       />

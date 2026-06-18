@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const API_URL = 'http://localhost:3001';
+import { authAPI } from '../../api';
 
 export const useAuth = () => {
   const [user, setUser] = useState(null);
@@ -9,8 +8,7 @@ export const useAuth = () => {
 
   useEffect(() => {
     if (token) {
-      // Проверяем токен, загружаем пользователя
-      // TODO: Реализовать проверку токена
+      // TODO: Проверить токен через /auth/me
       setLoading(false);
     } else {
       setLoading(false);
@@ -19,43 +17,25 @@ export const useAuth = () => {
 
   const login = async (username, password) => {
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.user);
-        return { success: true };
-      }
-      return { success: false, error: data.error };
+      const data = await authAPI.login(username, password);
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+      return { success: true };
     } catch (error) {
-      return { success: false, error: 'Ошибка подключения' };
+      return { success: false, error: error.message };
     }
   };
 
   const register = async (username, password) => {
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.user);
-        return { success: true };
-      }
-      return { success: false, error: data.error };
+      const data = await authAPI.register(username, password);
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+      return { success: true };
     } catch (error) {
-      return { success: false, error: 'Ошибка подключения' };
+      return { success: false, error: error.message };
     }
   };
 

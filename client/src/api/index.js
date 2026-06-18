@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3001';
+const API_URL = 'http://localhost:3002';
 
 const getToken = () => localStorage.getItem('token');
 
@@ -28,7 +28,6 @@ const request = async (endpoint, options = {}) => {
   return data;
 };
 
-// Авторизация
 export const authAPI = {
   login: (username, password) => 
     request('/auth/login', {
@@ -43,12 +42,10 @@ export const authAPI = {
     })
 };
 
-// Пользователи
 export const usersAPI = {
   getAll: () => request('/users')
 };
 
-// Сообщения
 export const messagesAPI = {
   getHistory: (userId, otherUserId) => 
     request(`/messages/${userId}/${otherUserId}`),
@@ -71,6 +68,12 @@ export const messagesAPI = {
       body: JSON.stringify({ to })
     }),
   
+  forward: (to, messageId) =>
+    request('/messages/forward', {
+      method: 'POST',
+      body: JSON.stringify({ to, messageId })
+    }),
+  
   addReaction: (messageId, reaction, to) =>
     request('/messages/reaction', {
       method: 'POST',
@@ -84,7 +87,6 @@ export const messagesAPI = {
     })
 };
 
-// Файлы
 export const uploadAPI = {
   upload: (file) => {
     const formData = new FormData();

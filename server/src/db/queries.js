@@ -98,6 +98,15 @@ module.exports = {
     });
   },
 
+  getMessageById: (id) => {
+    return new Promise((resolve, reject) => {
+      db.get('SELECT * FROM messages WHERE id = ?', [id], (err, row) => {
+        if (err) reject(err);
+        resolve(row);
+      });
+    });
+  },
+
   markMessagesAsRead: (from, to) => {
     return new Promise((resolve, reject) => {
       db.run(
@@ -111,7 +120,6 @@ module.exports = {
     });
   },
 
-  // Реакции
   addReaction: (id, messageId, userId, reaction) => {
     return new Promise((resolve, reject) => {
       db.run(

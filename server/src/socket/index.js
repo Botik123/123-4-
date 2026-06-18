@@ -1,40 +1,65 @@
 const WebSocket = require('ws');
-const redis = require('../redis');
-const db = require('../db/queries');
 const { verifyToken } = require('../middleware/auth');
 
 // Хранилище активных подключений
 const clients = new Map();
 
 const setupWebSocket = (server) => {
-  const wss = new WebSocket.Server({ server });
+  const wss = new WebSocket.Server({ 
+    server,
+    perMessageDeflate: false,
+  });
 
   wss.on('connection', (ws, req) => {
+    console.log('🔌 Новое WebSocket соединение');
+
     let currentUserId = null;
 
     ws.on('message', async (data) => {
       try {
-        const parsed = JSON.parse(data);
+        if (!data || data.length === 0) return;
+        
+        const parsed = JSON.parse(data.toString());
+        console.log('📩 Получено сообщение:', parsed.type);
 
         switch (parsed.type) {
           case 'auth': {
+            if (!parsed.token) {
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                message: 'Токен не предоставлен' 
+              }));
+              ws.close(1008, 'No token');
+              return;
+            }
+
             const decoded = verifyToken(parsed.token);
             if (!decoded) {
-              ws.send(JSON.stringify({ type: 'error', message: 'Недействительный токен' }));
-              ws.close();
+              ws.send(JSON.stringify({ 
+                type: 'error', 
+                message: 'Недействительный токен' 
+              }));
+              ws.close(1008, 'Invalid token');
               return;
             }
 
             currentUserId = decoded.userId;
+            
+            if (clients.has(currentUserId)) {
+              const oldWs = clients.get(currentUserId);
+              if (oldWs && oldWs.readyState === WebSocket.OPEN) {
+                oldWs.close(1000, 'Duplicate connection');
+              }
+            }
+            
             clients.set(currentUserId, ws);
             
-            // Сохраняем статус в Redis
-            await redis.set(`user:${currentUserId}:online`, 'true', { EX: 60 });
-            await redis.set(`user:${currentUserId}:last_seen`, Date.now(), { EX: 60 });
-            
-            // Рассылаем статус
+            ws.send(JSON.stringify({ 
+              type: 'auth_success', 
+              userId: currentUserId 
+            }));
+
             broadcastStatus(currentUserId, true);
-            broadcastNewUser(currentUserId);
             
             console.log(`✅ Пользователь ${currentUserId} авторизован (клиентов: ${clients.size})`);
             break;
@@ -51,27 +76,40 @@ const setupWebSocket = (server) => {
             break;
           }
 
-          default: {
-            console.log('Неизвестный тип сообщения:', parsed.type);
-          }
+          default:
+            console.log('Неизвестный тип:', parsed.type);
         }
       } catch (error) {
-        console.error('WebSocket error:', error);
+        console.error('Ошибка обработки сообщения:', error);
+        ws.send(JSON.stringify({ 
+          type: 'error', 
+          message: 'Ошибка обработки запроса' 
+        }));
       }
     });
 
-    ws.on('close', async () => {
+    ws.on('close', (code, reason) => {
+      console.log(`🔌 Соединение закрыто: ${code} - ${reason || 'Без причины'}`);
       if (currentUserId) {
         clients.delete(currentUserId);
-        await redis.del(`user:${currentUserId}:online`);
-        await redis.set(`user:${currentUserId}:last_seen`, Date.now());
         broadcastStatus(currentUserId, false);
-        console.log(`🔌 Пользователь ${currentUserId} отключился (клиентов: ${clients.size})`);
+        console.log(`📊 Клиентов осталось: ${clients.size}`);
       }
     });
 
     ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      console.error('WebSocket ошибка:', error);
+    });
+
+    // Ping для проверки соединения
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      }
+    }, 30000);
+
+    ws.on('close', () => {
+      clearInterval(pingInterval);
     });
   });
 
@@ -79,7 +117,7 @@ const setupWebSocket = (server) => {
 };
 
 // Рассылка статуса
-const broadcastStatus = async (userId, isOnline) => {
+const broadcastStatus = (userId, isOnline) => {
   const statusMessage = JSON.stringify({
     type: 'status',
     userId: userId,
@@ -94,29 +132,8 @@ const broadcastStatus = async (userId, isOnline) => {
   });
 };
 
-// Уведомление о новом пользователе
-const broadcastNewUser = async (userId) => {
-  try {
-    const user = await db.getUserById(userId);
-    if (!user) return;
-
-    const message = JSON.stringify({
-      type: 'new_user',
-      user: user
-    });
-
-    clients.forEach((client, clientId) => {
-      if (clientId !== userId && client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }
-    });
-  } catch (error) {
-    console.error('Error broadcasting new user:', error);
-  }
-};
-
-// Отправка сообщения получателю (вызывается из HTTP)
-const sendMessageToUser = (from, to, messageData) => {
+// Отправка сообщения получателю
+const sendMessageToUser = (to, messageData) => {
   const recipientWs = clients.get(to);
   if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {
     recipientWs.send(JSON.stringify({
@@ -128,7 +145,7 @@ const sendMessageToUser = (from, to, messageData) => {
   return false;
 };
 
-// Уведомление об удалении/редактировании
+// Уведомление об обновлении сообщения
 const notifyMessageUpdate = (to, type, data) => {
   const recipientWs = clients.get(to);
   if (recipientWs && recipientWs.readyState === WebSocket.OPEN) {

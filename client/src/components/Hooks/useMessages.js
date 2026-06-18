@@ -20,7 +20,6 @@ export const useMessages = (userId, otherUserId) => {
   }, []);
 
   const sendMessage = useCallback(async (to, text, replyTo) => {
-    // Проверяем, что to - это строка
     const recipientId = typeof to === 'string' ? to : to?.id || to;
     if (!recipientId) {
       console.error('sendMessage: invalid recipient', to);
@@ -58,7 +57,6 @@ export const useMessages = (userId, otherUserId) => {
   }, [userId]);
 
   const editMessage = useCallback(async (messageId, text, to) => {
-    // Проверяем, что to - это строка
     const recipientId = typeof to === 'string' ? to : to?.id || to;
     if (!recipientId) {
       console.error('editMessage: invalid recipient', to);
