@@ -18,8 +18,9 @@ const ChatItem = memo(({ user, isSelected, onSelect }) => (
   </div>
 ));
 
-const ChatList = ({ users, selectedUserId, onSelectUser, searchQuery, loading }) => {
+const ChatList = ({ users, selectedUserId, onSelectUser, searchQuery, loading, currentUserId }) => {
   const filteredUsers = users.filter(u =>
+    u.id !== currentUserId && // Не показывать текущего пользователя
     u.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

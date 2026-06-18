@@ -32,6 +32,7 @@ const Sidebar = ({
       <SearchBar value={searchQuery} onChange={setSearchQuery} />
       <ChatList 
         users={filteredUsers}
+        currentUserId={user?.id}
         selectedUserId={selectedUser?.id}
         onSelectUser={(user) => {
           onSelectUser(user);

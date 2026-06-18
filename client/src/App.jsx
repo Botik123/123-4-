@@ -146,6 +146,13 @@ function App() {
   // Загрузка истории сообщений при выборе пользователя
   useEffect(() => {
     if (selectedUser && user) {
+      // Защита: не загружаем историю если выбран сам себя
+      if (selectedUser.id === user.id) {
+        console.warn('⚠️ Попытка выбрать самого себя, игнорируем');
+        clearMessages();
+        return;
+      }
+      
       // Очищаем сообщения перед загрузкой нового чата
       clearMessages();
       loadHistory(user.id, selectedUser.id);
@@ -168,11 +175,12 @@ function App() {
         getMessages: () => messages,
         getUsers: () => users,
         getSelectedUser: () => selectedUser,
-        API_URL: 'http://localhost:3002'
+        API_URL: 'http://localhost:3002',
+        __debugUser: user
       };
       console.log('✅ Дебаг режим активирован! Используй window.__debug');
     }
-  }, [messages, users, selectedUser]);
+  }, [messages, users, selectedUser, user]);
 
   // ==========================================
   // === ОБРАБОТЧИКИ СОБЫТИЙ ===
@@ -180,6 +188,11 @@ function App() {
   
   // Выбор пользователя из списка
   const handleSelectUser = (user) => {
+    // Защита: не даём выбрать самого себя
+    if (user.id === window.__debugUser?.id) {
+      console.warn('⚠️ Нельзя выбрать самого себя');
+      return;
+    }
     setSelectedUser(user);
     if (window.innerWidth <= 768) {
       setIsMobileChatOpen(true);
