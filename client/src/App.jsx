@@ -127,11 +127,6 @@ function App() {
       });
       console.log(`  📝 Сохранён pending статус: ${data.userId} -> ${data.online}`);
       
-      // Если users уже загружен - применяем сразу
-      if (users && users.length > 0) {
-        applyPendingStatuses();
-      }
-      
       // Обновляем selectedUser если это он
       if (selectedUser && selectedUser.id === data.userId) {
         setSelectedUser(prev => prev ? {
@@ -165,11 +160,6 @@ function App() {
           pendingStatuses.current.set(u.id, { online: false, last_seen: Date.now() });
         }
       });
-      
-      // Если users уже загружен - применяем сразу
-      if (users && users.length > 0) {
-        applyPendingStatuses();
-      }
       
       // Обновляем selectedUser
       if (selectedUser) {
