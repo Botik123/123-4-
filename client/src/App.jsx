@@ -137,30 +137,23 @@ function App() {
     },
     // Список онлайн пользователей (при подключении)
     onOnlineUsers: (onlineUserIds) => {
-      console.log(`📡 onOnlineUsers:`, onlineUserIds);
+      console.log(`📡 onOnlineUsers:`, onlineUserIds, `users.length=${users.length}`);
+      
+      // Если users ещё не загружен - пропускаем (обновится при загрузке)
+      if (!users || users.length === 0) {
+        console.warn('⚠️ onOnlineUsers: users is empty, skipping');
+        return;
+      }
+      
       const onlineSet = new Set(onlineUserIds);
       
-      // Используем функциональное обновление чтобы избежать stale closure
-      setUsers(prev => {
-        if (!prev || !Array.isArray(prev)) {
-          console.warn('⚠️ onOnlineUsers: users is not an array');
-          return prev || [];
+      // Обновляем статусы всех пользователей через updateUserStatus
+      users.forEach(u => {
+        if (u.id !== user?.id) {
+          const isOnline = onlineSet.has(u.id);
+          console.log(`  📍 ${u.username}: ${u.online} -> ${isOnline}`);
+          updateUserStatus(u.id, isOnline, isOnline ? Date.now() : u.last_seen);
         }
-        
-        const updated = prev.map(u => {
-          if (u.id !== user?.id) {
-            const isOnline = onlineSet.has(u.id);
-            return {
-              ...u,
-              online: isOnline,
-              last_seen: isOnline ? Date.now() : u.last_seen
-            };
-          }
-          return u;
-        });
-        
-        console.log(`  ✅ Обновлены статусы. Онлайн: ${onlineUserIds.length} из ${updated.length}`);
-        return updated;
       });
       
       // Обновляем selectedUser

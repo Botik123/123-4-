@@ -44,9 +44,17 @@ export const useUsers = () => {
 
   // Обновление статуса пользователя (онлайн/оффлайн)
   const updateUserStatus = useCallback((userId, online, lastSeen) => {
+    if (!userId) {
+      console.warn('⚠️ updateUserStatus: userId is empty');
+      return;
+    }
     const newOnline = online === true || online === 'true' || online === 1;
     console.log(`🔄 updateUserStatus: userId=${userId}, online=${newOnline}`);
     setUsers(prev => {
+      if (!prev || prev.length === 0) {
+        console.warn(`⚠️ updateUserStatus: users is empty, cannot update ${userId}`);
+        return prev || [];
+      }
       const updated = prev.map(u => {
         if (u.id === userId) {
           console.log(`  ✅ Нашёл пользователя ${u.username}, обновляю online: ${u.online} -> ${newOnline}`);
