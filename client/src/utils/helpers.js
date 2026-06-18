@@ -118,40 +118,6 @@ export const parseFileMessage = (text) => {
   
   return null;
 };
-  }
-
-  // Парсинг аудио: 🎵 Аудио: name url
-  const audioMatch = text.match(/🎵 Аудио:\s*(.+?)\s+(https?:\/\/\S+)$/);
-  if (audioMatch) {
-    return { 
-      type: 'audio', 
-      name: audioMatch[1]?.trim() || 'Аудио', 
-      url: audioMatch[2] 
-    };
-  }
-  
-  // Парсинг видео: 🎬 Видео: name url
-  const videoMatch = text.match(/🎬 Видео:\s*(.+?)\s+(https?:\/\/\S+)$/);
-  if (videoMatch) {
-    return { 
-      type: 'video', 
-      name: videoMatch[1]?.trim() || 'Видео', 
-      url: videoMatch[2] 
-    };
-  }
-  
-  // Парсинг файлов: 📎 Файл: name url
-  const fileMatch = text.match(/📎 Файл:\s*(.+?)\s+(https?:\/\/\S+)$/);
-  if (fileMatch) {
-    return { 
-      type: 'file', 
-      name: fileMatch[1]?.trim() || 'Файл', 
-      url: fileMatch[2] 
-    };
-  }
-  
-  return null;
-};
 
 /**
  * Получение превью сообщения для отображения в ответе
