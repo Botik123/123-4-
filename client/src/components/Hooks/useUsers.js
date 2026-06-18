@@ -24,10 +24,18 @@ export const useUsers = () => {
     });
   }, []);
 
+  // ИСПРАВЛЕННОЕ ОБНОВЛЕНИЕ СТАТУСА
   const updateUserStatus = useCallback((userId, online, lastSeen) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, online, lastSeen } : u
-    ));
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        return { 
+          ...u, 
+          online: online === true, // Приводим к boolean
+          last_seen: lastSeen || Date.now()
+        };
+      }
+      return u;
+    }));
   }, []);
 
   return {

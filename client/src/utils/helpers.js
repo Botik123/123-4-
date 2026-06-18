@@ -42,51 +42,53 @@ export const formatLastSeen = (timestamp) => {
   });
 };
 
-// Парсинг файлового сообщения
+// Парсинг файлового сообщения - ИСПРАВЛЕННАЯ ВЕРСИЯ
 export const parseFileMessage = (text) => {
-  if (!text) return null;
+  if (!text || typeof text !== 'string') return null;
   
+  // Проверка на удалённое сообщение
   if (text === '🗑️ Сообщение удалено') {
     return { type: 'deleted' };
   }
   
-  // Изображение
-  const imageMatch = text.match(/📷 Изображение: (https?:\/\/[^\s]+)/);
+  // --- ИЗОБРАЖЕНИЯ ---
+  const imageMatch = text.match(/📷 Изображение:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (imageMatch) {
-    return { type: 'image', url: imageMatch[1] };
+    return { 
+      type: 'image', 
+      name: imageMatch[1]?.trim() || 'Изображение',
+      url: imageMatch[2] 
+    };
   }
   
-  // Аудио
-  const audioMatch = text.match(/🎵 Аудио: ([^\n]+)/);
+  // --- АУДИО ---
+  const audioMatch = text.match(/🎵 Аудио:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (audioMatch) {
-    const urlMatch = audioMatch[1].match(/https?:\/\/[^\s]+/);
-    const name = audioMatch[1].replace(/https?:\/\/[^\s]+/, '').trim();
-    if (urlMatch) {
-      return { type: 'audio', name: name || 'Аудио', url: urlMatch[0] };
-    }
-    return { type: 'audio', name: audioMatch[1].trim(), url: null };
+    return { 
+      type: 'audio', 
+      name: audioMatch[1]?.trim() || 'Аудио', 
+      url: audioMatch[2] 
+    };
   }
   
-  // Видео
-  const videoMatch = text.match(/🎬 Видео: ([^\n]+)/);
+  // --- ВИДЕО ---
+  const videoMatch = text.match(/🎬 Видео:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (videoMatch) {
-    const urlMatch = videoMatch[1].match(/https?:\/\/[^\s]+/);
-    const name = videoMatch[1].replace(/https?:\/\/[^\s]+/, '').trim();
-    if (urlMatch) {
-      return { type: 'video', name: name || 'Видео', url: urlMatch[0] };
-    }
-    return { type: 'video', name: videoMatch[1].trim(), url: null };
+    return { 
+      type: 'video', 
+      name: videoMatch[1]?.trim() || 'Видео', 
+      url: videoMatch[2] 
+    };
   }
   
-  // Файл
-  const fileMatch = text.match(/📎 Файл: ([^\n]+)/);
+  // --- ФАЙЛЫ ---
+  const fileMatch = text.match(/📎 Файл:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (fileMatch) {
-    const urlMatch = fileMatch[1].match(/https?:\/\/[^\s]+/);
-    const name = fileMatch[1].replace(/https?:\/\/[^\s]+/, '').trim();
-    if (urlMatch) {
-      return { type: 'file', name: name || 'Файл', url: urlMatch[0] };
-    }
-    return { type: 'file', name: fileMatch[1].trim(), url: null };
+    return { 
+      type: 'file', 
+      name: fileMatch[1]?.trim() || 'Файл', 
+      url: fileMatch[2] 
+    };
   }
   
   return null;
@@ -103,10 +105,10 @@ export const getMessagePreview = (msg) => {
   const fileData = parseFileMessage(msg.text);
   if (fileData) {
     switch (fileData.type) {
-      case 'image': return '📷 Изображение';
-      case 'audio': return `🎵 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Аудио'}`;
-      case 'video': return `🎬 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Видео'}`;
-      case 'file': return `📎 ${fileData.name ? fileData.name.substring(0, 25) + '...' : 'Файл'}`;
+      case 'image': return `📷 ${fileData.name || 'Изображение'}`;
+      case 'audio': return `🎵 ${fileData.name || 'Аудио'}`;
+      case 'video': return `🎬 ${fileData.name || 'Видео'}`;
+      case 'file': return `📎 ${fileData.name || 'Файл'}`;
       default: return '📎 Файл';
     }
   }

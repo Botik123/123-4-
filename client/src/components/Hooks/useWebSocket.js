@@ -7,7 +7,8 @@ export const useWebSocket = ({
   onMessageDeleted,
   onReaction,
   onStatus,
-  onNewUser
+  onNewUser,
+  onOnlineUsers // Добавляем новый обработчик
 }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -75,6 +76,7 @@ export const useWebSocket = ({
         if (!isMounted.current) return;
         try {
           const data = JSON.parse(event.data);
+          console.log('📩 WebSocket получено:', data.type);
           
           switch (data.type) {
             case 'auth_success':
@@ -92,17 +94,23 @@ export const useWebSocket = ({
             case 'reaction':
               onReaction?.(data);
               break;
-            case 'status':
+            case 'status': {
+              console.log(`📡 Получен статус: пользователь ${data.userId} -> ${data.online ? 'онлайн' : 'оффлайн'}`);
               onStatus?.(data);
+              }
               break;
             case 'new_user':
               onNewUser?.(data);
+              break;
+            case 'online_users':
+              // Обработка списка онлайн пользователей
+              onOnlineUsers?.(data.users);
               break;
             case 'error':
               console.error('❌ Server error:', data.message);
               break;
             default:
-              break;
+              console.log('📨 Неизвестный тип:', data.type);
           }
         } catch (error) {
           console.error('❌ Error parsing message:', error);
@@ -131,7 +139,7 @@ export const useWebSocket = ({
       console.error('❌ Failed to create WebSocket:', error);
       setIsConnecting(false);
     }
-  }, [isConnecting, onMessage, onMessageEdited, onMessageDeleted, onReaction, onStatus, onNewUser]);
+  }, [isConnecting, onMessage, onMessageEdited, onMessageDeleted, onReaction, onStatus, onNewUser, onOnlineUsers]);
 
   const disconnect = useCallback(() => {
     console.log('🔌 Отключение WebSocket');

@@ -8,6 +8,7 @@ import { useWebSocket } from './components/Hooks/useWebSocket';
 import { useMessages } from './components/Hooks/useMessages';
 import { useUsers } from './components/Hooks/useUsers';
 import { playMessageSound, playSendSound } from './utils/sounds';
+import { parseFileMessage, getCleanText, getReplyPreview } from './utils/helpers';
 
 function App() {
   const [isDarkTheme, setIsDarkTheme] = useState(false);
@@ -21,7 +22,8 @@ function App() {
     loading: usersLoading, 
     fetchUsers,
     addUser,
-    updateUserStatus 
+    updateUserStatus,
+    setUsers
   } = useUsers();
   const {
     messages,
@@ -63,12 +65,57 @@ function App() {
       }
     },
     onStatus: (data) => {
+      // Обновляем в списке пользователей
       updateUserStatus(data.userId, data.online, data.last_seen);
+      
+      // 🔥 ФИКС: Обновляем статус выбранного пользователя
+      if (selectedUser && selectedUser.id === data.userId) {
+        setSelectedUser(prev => ({
+          ...prev,
+          online: data.online,
+          last_seen: data.last_seen
+        }));
+      }
     },
     onNewUser: (data) => {
       addUser(data.user);
+    },
+    onOnlineUsers: (onlineUserIds) => {
+      // Обновляем статусы всех пользователей
+      const onlineSet = new Set(onlineUserIds);
+      
+      // Обновляем в списке пользователей
+      setUsers(prev => prev.map(u => ({
+        ...u,
+        online: onlineSet.has(u.id)
+      })));
+      
+      // 🔥 ФИКС: Обновляем статус выбранного пользователя
+      if (selectedUser) {
+        setSelectedUser(prev => ({
+          ...prev,
+          online: onlineSet.has(prev.id)
+        }));
+      }
     }
   });
+
+  // ДЕБАГ РЕЖИМ
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__debug = {
+        parseFileMessage,
+        getCleanText,
+        getReplyPreview,
+        getMessages: () => messages,
+        getUsers: () => users,
+        getSelectedUser: () => selectedUser,
+        API_URL: 'http://localhost:3002',
+        getWebSocket: () => wsRef?.current || null
+      };
+      console.log('✅ Дебаг режим активирован! Используй window.__debug');
+    }
+  }, [messages, users, selectedUser]);
 
   // Подключаем WebSocket при авторизации
   useEffect(() => {
@@ -116,7 +163,6 @@ function App() {
     setReplyTo(null);
   };
 
-  // Обработка отправки файла
   const handleFileSend = (fileText) => {
     if (!selectedUser) return;
     sendMessage(selectedUser.id, fileText);

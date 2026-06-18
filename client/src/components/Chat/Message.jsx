@@ -27,12 +27,12 @@ const renderFileMessage = (fileData) => {
               <audio controls>
                 <source src={fileData.url} type="audio/mpeg" />
               </audio>
-              <div className="audio-name">{fileData.name}</div>
+              <div className="audio-name">{fileData.name || 'Аудио'}</div>
             </div>
           </div>
         );
       }
-      return <div className="media-message file-message">🎵 {fileData.name}</div>;
+      return <div className="media-message file-message">🎵 {fileData.name || 'Аудио'}</div>;
 
     case 'video':
       if (fileData.url) {
@@ -41,11 +41,11 @@ const renderFileMessage = (fileData) => {
             <video controls>
               <source src={fileData.url} type="video/mp4" />
             </video>
-            <div className="video-name">{fileData.name}</div>
+            <div className="video-name">{fileData.name || 'Видео'}</div>
           </div>
         );
       }
-      return <div className="media-message file-message">🎬 {fileData.name}</div>;
+      return <div className="media-message file-message">🎬 {fileData.name || 'Видео'}</div>;
 
     case 'file':
       if (fileData.url) {
@@ -54,14 +54,14 @@ const renderFileMessage = (fileData) => {
             <a href={fileData.url} download target="_blank" rel="noopener noreferrer">
               <div className="file-card">
                 <span className="file-icon">📄</span>
-                <span className="file-name">{fileData.name}</span>
+                <span className="file-name">{fileData.name || 'Файл'}</span>
                 <span className="file-download">⬇️</span>
               </div>
             </a>
           </div>
         );
       }
-      return <div className="media-message file-message">📎 {fileData.name}</div>;
+      return <div className="media-message file-message">📎 {fileData.name || 'Файл'}</div>;
 
     default:
       return null;
@@ -69,7 +69,7 @@ const renderFileMessage = (fileData) => {
 };
 
 // Рендер содержимого сообщения
-const renderMessageContent = (msg) => {
+const renderMessageContent = (msg, replyMessage) => {
   const isDeleted = msg.deleted || msg.text === '🗑️ Сообщение удалено';
   
   if (isDeleted) {
@@ -82,21 +82,22 @@ const renderMessageContent = (msg) => {
     return renderFileMessage(fileData);
   }
 
-  // Проверяем, есть ли ответ
-  const replyPreview = getReplyPreview(msg.text);
-  const cleanText = getCleanText(msg.text);
+  // Проверяем, есть ли ответ (через reply_to)
+  const hasReply = replyMessage && !msg.text.includes('↩️ Ответ:');
 
   return (
     <>
-      {replyPreview && (
+      {hasReply && (
         <div className="reply-preview-inline">
           <div className="reply-preview-label">↩️ Ответ</div>
-          <div className="reply-preview-text">{replyPreview}</div>
+          <div className="reply-preview-text">
+            {replyMessage.text || 'Сообщение'}
+          </div>
         </div>
       )}
       <div 
         className="message-text-content" 
-        dangerouslySetInnerHTML={{ __html: escapeHtml(cleanText || msg.text || '') }} 
+        dangerouslySetInnerHTML={{ __html: escapeHtml(msg.text || '') }} 
       />
     </>
   );
@@ -109,13 +110,19 @@ const Message = memo(({
   onForward, 
   onEdit, 
   onDelete, 
-  onReaction 
+  onReaction,
+  allMessages = []
 }) => {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   
   const isDeleted = message.deleted || message.text === '🗑️ Сообщение удалено';
   const msgReactions = message.reactions || {};
   const reactionEntries = Object.entries(msgReactions);
+  
+  // Находим сообщение, на которое отвечают
+  const replyMessage = message.reply_to 
+    ? allMessages.find(m => m.id === message.reply_to) 
+    : null;
 
   const handleEdit = () => {
     if (onEdit) {
@@ -172,7 +179,7 @@ const Message = memo(({
 
         {/* Message Bubble */}
         <div className="bubble">
-          {renderMessageContent(message)}
+          {renderMessageContent(message, replyMessage)}
         </div>
 
         {/* Message Footer */}

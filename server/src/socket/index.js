@@ -45,6 +45,7 @@ const setupWebSocket = (server) => {
 
             currentUserId = decoded.userId;
             
+            // Закрываем старое соединение если есть
             if (clients.has(currentUserId)) {
               const oldWs = clients.get(currentUserId);
               if (oldWs && oldWs.readyState === WebSocket.OPEN) {
@@ -54,12 +55,20 @@ const setupWebSocket = (server) => {
             
             clients.set(currentUserId, ws);
             
+            // Отправляем подтверждение авторизации
             ws.send(JSON.stringify({ 
               type: 'auth_success', 
               userId: currentUserId 
             }));
 
+            // 🔥 ФИКС 1: Отправляем статус ВСЕМ пользователям
             broadcastStatus(currentUserId, true);
+            
+            // 🔥 ФИКС 2: Отправляем обновлённый список онлайн ВСЕМ пользователям
+            broadcastOnlineUsers();
+            
+            // 🔥 ФИКС 3: Отправляем новому пользователю статусы ВСЕХ остальных
+            sendAllStatuses(ws);
             
             console.log(`✅ Пользователь ${currentUserId} авторизован (клиентов: ${clients.size})`);
             break;
@@ -92,7 +101,9 @@ const setupWebSocket = (server) => {
       console.log(`🔌 Соединение закрыто: ${code} - ${reason || 'Без причины'}`);
       if (currentUserId) {
         clients.delete(currentUserId);
+        // 🔥 ФИКС: Отправляем статус ВСЕМ при выходе
         broadcastStatus(currentUserId, false);
+        broadcastOnlineUsers();
         console.log(`📊 Клиентов осталось: ${clients.size}`);
       }
     });
@@ -103,9 +114,16 @@ const setupWebSocket = (server) => {
 
     // Ping для проверки соединения
     const pingInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.ping();
-      }
+      clients.forEach((client, userId) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.ping();
+        } else {
+          // Если клиент мёртв — удаляем
+          clients.delete(userId);
+          broadcastStatus(userId, false);
+          broadcastOnlineUsers();
+        }
+      });
     }, 30000);
 
     ws.on('close', () => {
@@ -116,7 +134,30 @@ const setupWebSocket = (server) => {
   return wss;
 };
 
-// Рассылка статуса
+// 🔥 ФИКС 4: Отправка статусов всех пользователей новому клиенту
+const sendAllStatuses = (ws) => {
+  const statuses = Array.from(clients.keys()).map(userId => ({
+    userId,
+    online: true,
+    last_seen: Date.now()
+  }));
+
+  // Отправляем статусы по одному
+  statuses.forEach(status => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'status',
+        userId: status.userId,
+        online: status.online,
+        last_seen: status.last_seen
+      }));
+    }
+  });
+  
+  console.log(`📡 Отправлены статусы ${statuses.length} пользователей новому клиенту`);
+};
+
+// 🔥 ИСПРАВЛЕННАЯ РАССЫЛКА СТАТУСА
 const broadcastStatus = (userId, isOnline) => {
   const statusMessage = JSON.stringify({
     type: 'status',
@@ -125,11 +166,39 @@ const broadcastStatus = (userId, isOnline) => {
     last_seen: Date.now()
   });
 
-  clients.forEach((client) => {
+  console.log(`📡 Рассылка статуса: ${userId} -> ${isOnline ? 'онлайн' : 'оффлайн'}, клиентов: ${clients.size}`);
+
+  // Отправляем ВСЕМ клиентам
+  let sentCount = 0;
+  clients.forEach((client, clientId) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(statusMessage);
+      sentCount++;
+      console.log(`📤 Статус отправлен клиенту: ${clientId}`);
     }
   });
+  console.log(`📤 Статус отправлен ${sentCount} клиентам`);
+};
+
+// 🔥 ИСПРАВЛЕННАЯ РАССЫЛКА СПИСКА ОНЛАЙН
+const broadcastOnlineUsers = () => {
+  const onlineUsers = Array.from(clients.keys());
+  const message = JSON.stringify({
+    type: 'online_users',
+    users: onlineUsers
+  });
+  
+  console.log(`📡 Рассылка списка онлайн (${onlineUsers.length} пользователей):`, onlineUsers);
+
+  let sentCount = 0;
+  clients.forEach((client, clientId) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+      sentCount++;
+      console.log(`📤 Список онлайн отправлен клиенту: ${clientId}`);
+    }
+  });
+  console.log(`📤 Список онлайн отправлен ${sentCount} клиентам`);
 };
 
 // Отправка сообщения получателю
@@ -142,6 +211,7 @@ const sendMessageToUser = (to, messageData) => {
     }));
     return true;
   }
+  console.log(`⚠️ Получатель ${to} не в сети`);
   return false;
 };
 
@@ -177,5 +247,7 @@ module.exports = {
   sendMessageToUser,
   notifyMessageUpdate,
   broadcastReaction,
-  broadcastStatus
+  broadcastStatus,
+  broadcastOnlineUsers,
+  sendAllStatuses
 };

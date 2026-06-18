@@ -88,16 +88,28 @@ export const messagesAPI = {
 };
 
 export const uploadAPI = {
-  upload: (file) => {
+  upload: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
     
-    return fetch(`${API_URL}/upload`, {
+    const token = getToken();
+    console.log('📤 Загрузка файла, токен:', token ? 'есть' : 'нет');
+    
+    const response = await fetch(`${API_URL}/upload`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${getToken()}`
+        'Authorization': `Bearer ${token}`
       },
       body: formData
-    }).then(res => res.json());
+    });
+    
+    const data = await response.json();
+    console.log('📥 Ответ сервера:', data);
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Ошибка загрузки');
+    }
+    
+    return data;
   }
 };

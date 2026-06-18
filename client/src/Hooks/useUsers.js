@@ -25,9 +25,16 @@ export const useUsers = () => {
   }, []);
 
   const updateUserStatus = useCallback((userId, online, lastSeen) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, online, last_seen } : u
-    ));
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        return { 
+          ...u, 
+          online: online === true,
+          last_seen: lastSeen || Date.now()
+        };
+      }
+      return u;
+    }));
   }, []);
 
   return {
@@ -35,6 +42,7 @@ export const useUsers = () => {
     loading,
     fetchUsers,
     addUser,
-    updateUserStatus
+    updateUserStatus,
+    setUsers // Добавляем setUsers для прямого обновления
   };
 };

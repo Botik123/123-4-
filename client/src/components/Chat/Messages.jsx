@@ -35,6 +35,7 @@ const Messages = ({
               onEdit={onEdit}
               onDelete={onDelete}
               onReaction={onReaction}
+              allMessages={messages} // Передаём все сообщения для поиска reply_to
             />
           ))}
         </React.Fragment>

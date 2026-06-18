@@ -27,6 +27,8 @@ const MessageInput = ({
     const file = event.target.files[0];
     if (!file) return;
 
+    console.log('📁 Выбран файл:', file.name, file.type, file.size);
+
     if (file.size > MAX_FILE_SIZE) {
       alert(`Файл слишком большой! Максимум ${MAX_FILE_SIZE / 1024 / 1024}MB`);
       return;
@@ -40,28 +42,34 @@ const MessageInput = ({
 
     setUploading(true);
     try {
+      console.log('📤 Загрузка файла на сервер...');
       const result = await uploadAPI.upload(file);
-      // Формируем правильное сообщение для файла
+      console.log('✅ Файл загружен:', result);
+
+      const fullUrl = `http://localhost:3002${result.url}`;
+      
+      // 🔥 ПРАВИЛЬНОЕ ФОРМАТИРОВАНИЕ
       let fileText = '';
       if (result.type === 'image') {
-        fileText = `📷 Изображение: ${result.url}`;
+        fileText = `📷 Изображение: ${result.name} ${fullUrl}`;
       } else if (result.type === 'audio') {
-        fileText = `🎵 Аудио: ${result.name} ${result.url}`;
+        fileText = `🎵 Аудио: ${result.name} ${fullUrl}`;
       } else if (result.type === 'video') {
-        fileText = `🎬 Видео: ${result.name} ${result.url}`;
+        fileText = `🎬 Видео: ${result.name} ${fullUrl}`;
       } else {
-        fileText = `📎 Файл: ${result.name} ${result.url}`;
+        fileText = `📎 Файл: ${result.name} ${fullUrl}`;
       }
-      
-      // Отправляем через onFileSend
+
+      console.log('📨 Отправка файлового сообщения:', fileText);
+
       if (onFileSend) {
         onFileSend(fileText);
       } else {
-        // Если onFileSend не передан, используем onSend
         onSend(fileText);
       }
+      
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       alert('Ошибка загрузки файла');
     } finally {
       setUploading(false);

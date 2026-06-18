@@ -7,7 +7,8 @@ export const useWebSocket = ({
   onMessageDeleted,
   onReaction,
   onStatus,
-  onNewUser
+  onNewUser,
+  onOnlineUsers
 }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -17,7 +18,6 @@ export const useWebSocket = ({
   const maxReconnectAttempts = 3;
   const isMounted = useRef(true);
 
-  // Очистка ресурсов
   const cleanup = useCallback(() => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
@@ -26,9 +26,7 @@ export const useWebSocket = ({
     if (wsRef.current) {
       try {
         wsRef.current.close(1000, 'Cleanup');
-      } catch (e) {
-        // Игнорируем ошибки закрытия
-      }
+      } catch (e) {}
       wsRef.current = null;
     }
     setIsConnected(false);
@@ -36,31 +34,24 @@ export const useWebSocket = ({
   }, []);
 
   const connect = useCallback((userId) => {
-    // Если компонент размонтирован
-    if (!isMounted.current) return;
-
-    // Если уже есть открытое соединение
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       console.log('✅ WebSocket уже подключен');
       return;
     }
 
-    // Если соединение устанавливается
     if (isConnecting) {
       console.log('⏳ Уже в процессе подключения');
       return;
     }
 
-    // Проверяем токен
     const token = localStorage.getItem('token');
     if (!token) {
       console.warn('⚠️ Нет токена');
       return;
     }
 
-    // Если превышено количество попыток
     if (reconnectAttempts.current >= maxReconnectAttempts) {
-      console.warn('⚠️ Превышено количество попыток переподключения');
+      console.warn('⚠️ Достигнут лимит попыток');
       return;
     }
 
@@ -74,51 +65,63 @@ export const useWebSocket = ({
 
       socket.onopen = () => {
         if (!isMounted.current) return;
-        
         console.log('✅ WebSocket connected');
         setIsConnecting(false);
         setIsConnected(true);
         reconnectAttempts.current = 0;
-        
-        // Отправляем токен
-        socket.send(JSON.stringify({ 
-          type: 'auth', 
-          token: token 
-        }));
+        socket.send(JSON.stringify({ type: 'auth', token: token }));
       };
 
       socket.onmessage = (event) => {
         if (!isMounted.current) return;
-        
         try {
           const data = JSON.parse(event.data);
-          console.log('📩 Получено:', data.type);
+          console.log('📩 WebSocket получено:', data.type);
           
           switch (data.type) {
             case 'auth_success':
               console.log('✅ Аутентификация успешна');
               break;
+              
             case 'message':
               onMessage?.(data);
               break;
+              
             case 'message_edited':
               onMessageEdited?.(data);
               break;
+              
             case 'message_deleted':
               onMessageDeleted?.(data);
               break;
+              
             case 'reaction':
               onReaction?.(data);
               break;
+              
             case 'status':
               onStatus?.(data);
               break;
+              
             case 'new_user':
               onNewUser?.(data);
               break;
+              
+            case 'online_users': {
+              // 🔥 ОБРАБОТКА СПИСКА ОНЛАЙН ПОЛЬЗОВАТЕЛЕЙ
+              const onlineUserIds = data.users || [];
+              console.log(`📡 Получен список онлайн (${onlineUserIds.length} пользователей):`, onlineUserIds);
+              
+              if (onOnlineUsers) {
+                onOnlineUsers(onlineUserIds);
+              }
+              break;
+            }
+              
             case 'error':
               console.error('❌ Server error:', data.message);
               break;
+              
             default:
               console.log('📨 Неизвестный тип:', data.type);
           }
@@ -129,20 +132,19 @@ export const useWebSocket = ({
 
       socket.onclose = (event) => {
         if (!isMounted.current) return;
-        
         console.log(`🔌 WebSocket disconnected: ${event.code} - ${event.reason || 'Без причины'}`);
         setIsConnected(false);
         setIsConnecting(false);
         
         // Не переподключаемся при нормальном закрытии
-        if (event.code === 1000 || event.code === 1001) {
-          console.log('✅ Нормальное закрытие');
+        if (event.code === 1000 || event.code === 1001 || event.code === 1006) {
+          console.log('⚠️ Переподключение отключено для кода:', event.code);
           return;
         }
 
         // Переподключение с ограничением
         if (reconnectAttempts.current < maxReconnectAttempts) {
-          const delay = 5000 * reconnectAttempts.current; // 5, 10, 15 секунд
+          const delay = 3000 * reconnectAttempts.current;
           console.log(`🔄 Переподключение через ${delay}ms...`);
           
           if (reconnectTimerRef.current) {
@@ -170,7 +172,7 @@ export const useWebSocket = ({
       console.error('❌ Failed to create WebSocket:', error);
       setIsConnecting(false);
     }
-  }, [isConnecting, onMessage, onMessageEdited, onMessageDeleted, onReaction, onStatus, onNewUser]);
+  }, [isConnecting, onMessage, onMessageEdited, onMessageDeleted, onReaction, onStatus, onNewUser, onOnlineUsers]);
 
   const disconnect = useCallback(() => {
     console.log('🔌 Отключение WebSocket');
@@ -191,7 +193,6 @@ export const useWebSocket = ({
     send({ type: 'typing', to });
   }, [send]);
 
-  // Очистка при размонтировании
   useEffect(() => {
     isMounted.current = true;
     return () => {
