@@ -182,34 +182,6 @@ function App() {
     }
   });
 
-  // Применить отложенные статусы
-  const applyPendingStatuses = useCallback(() => {
-    if (!users || users.length === 0) return;
-    
-    console.log(`🔄 applyPendingStatuses: ${pendingStatuses.current.size} статусов для ${users.length} пользователей`);
-    
-    setUsers(prev => {
-      if (!prev || prev.length === 0) return prev;
-      
-      const updated = prev.map(u => {
-        const pending = pendingStatuses.current.get(u.id);
-        if (pending && u.id !== user?.id) {
-          console.log(`  📍 ${u.username}: ${u.online} -> ${pending.online}`);
-          return {
-            ...u,
-            online: pending.online,
-            last_seen: pending.last_seen || u.last_seen
-          };
-        }
-        return u;
-      });
-      
-      pendingStatuses.current.clear();
-      console.log(`  ✅ Статусы применены`);
-      return updated;
-    });
-  }, [users, user?.id]);
-
   // ==========================================
   // === EFFECTS: ЖИЗНЕННЫЙ ЦИКЛ ===
   // ==========================================
@@ -234,10 +206,30 @@ function App() {
   // Применяем pending статусы после загрузки users
   useEffect(() => {
     if (users && users.length > 0 && pendingStatuses.current.size > 0) {
-      console.log(`🔄 users загружен, применяем ${pendingStatuses.current.size} pending статусов`);
-      applyPendingStatuses();
+      console.log(`🔄 users загружен (${users.length}), применяем ${pendingStatuses.current.size} pending статусов`);
+      
+      setUsers(prev => {
+        if (!prev || prev.length === 0) return prev;
+        
+        const updated = prev.map(u => {
+          const pending = pendingStatuses.current.get(u.id);
+          if (pending && u.id !== user?.id) {
+            console.log(`  📍 ${u.username}: ${u.online} -> ${pending.online}`);
+            return {
+              ...u,
+              online: pending.online,
+              last_seen: pending.last_seen || u.last_seen
+            };
+          }
+          return u;
+        });
+        
+        pendingStatuses.current.clear();
+        console.log(`  ✅ Статусы применены`);
+        return updated;
+      });
     }
-  }, [users, applyPendingStatuses]);
+  }, [users, user?.id]);
 
   // Загрузка истории сообщений при выборе пользователя
   useEffect(() => {
