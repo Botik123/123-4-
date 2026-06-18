@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { messagesAPI } from '../../api';
+import { getCleanText } from '../../utils/helpers';
 
 export const useMessages = (userId, otherUserId) => {
   const [messages, setMessages] = useState([]);
@@ -20,7 +21,6 @@ export const useMessages = (userId, otherUserId) => {
   }, []);
 
   const sendMessage = useCallback(async (to, text, replyTo) => {
-    // Проверяем, что to - это строка
     const recipientId = typeof to === 'string' ? to : to?.id || to;
     if (!recipientId) {
       console.error('sendMessage: invalid recipient', to);
@@ -58,7 +58,6 @@ export const useMessages = (userId, otherUserId) => {
   }, [userId]);
 
   const editMessage = useCallback(async (messageId, text, to) => {
-    // Проверяем, что to - это строка
     const recipientId = typeof to === 'string' ? to : to?.id || to;
     if (!recipientId) {
       console.error('editMessage: invalid recipient', to);
@@ -108,13 +107,22 @@ export const useMessages = (userId, otherUserId) => {
     }
 
     try {
-      const result = await messagesAPI.forward(recipientId, messageId);
+      const originalMsg = messages.find(m => m.id === messageId);
+      if (!originalMsg) {
+        alert('Сообщение не найдено');
+        return;
+      }
+
+      const cleanText = getCleanText(originalMsg.text);
+      const forwardText = `📎 Переслано: ${cleanText || originalMsg.text}`;
+
+      const result = await sendMessage(recipientId, forwardText);
       return result;
     } catch (error) {
       console.error('Error forwarding message:', error);
       alert('Ошибка пересылки');
     }
-  }, []);
+  }, [messages, sendMessage]);
 
   const addReaction = useCallback(async (messageId, reaction, to) => {
     const recipientId = typeof to === 'string' ? to : to?.id || to;
@@ -123,22 +131,31 @@ export const useMessages = (userId, otherUserId) => {
       return;
     }
 
+    setMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        const reactions = msg.reactions || {};
+        if (reactions[userId] === reaction) {
+          delete reactions[userId];
+        } else {
+          reactions[userId] = reaction;
+        }
+        return { ...msg, reactions };
+      }
+      return msg;
+    }));
+
     try {
       await messagesAPI.addReaction(messageId, reaction, recipientId);
+    } catch (error) {
+      console.error('Error adding reaction:', error);
       setMessages(prev => prev.map(msg => {
         if (msg.id === messageId) {
           const reactions = msg.reactions || {};
-          if (reactions[userId] === reaction) {
-            delete reactions[userId];
-          } else {
-            reactions[userId] = reaction;
-          }
+          delete reactions[userId];
           return { ...msg, reactions };
         }
         return msg;
       }));
-    } catch (error) {
-      console.error('Error adding reaction:', error);
     }
   }, [userId]);
 

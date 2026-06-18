@@ -43,6 +43,6 @@ export const useUsers = () => {
     fetchUsers,
     addUser,
     updateUserStatus,
-    setUsers // Добавляем setUsers для прямого обновления
+    setUsers
   };
 };

@@ -17,6 +17,7 @@ function App() {
   const isConnectingRef = useRef(false);
 
   const { user, loading: authLoading, login, register, logout } = useAuth();
+  
   const { 
     users, 
     loading: usersLoading, 
@@ -25,6 +26,7 @@ function App() {
     updateUserStatus,
     setUsers
   } = useUsers();
+  
   const {
     messages,
     loading: messagesLoading,
@@ -39,6 +41,7 @@ function App() {
     loadHistory,
     markAsRead
   } = useMessages(user?.id, selectedUser?.id);
+  
   const {
     isConnecting,
     sendTyping,
@@ -65,10 +68,7 @@ function App() {
       }
     },
     onStatus: (data) => {
-      // Обновляем в списке пользователей
       updateUserStatus(data.userId, data.online, data.last_seen);
-      
-      // 🔥 ФИКС: Обновляем статус выбранного пользователя
       if (selectedUser && selectedUser.id === data.userId) {
         setSelectedUser(prev => ({
           ...prev,
@@ -78,19 +78,27 @@ function App() {
       }
     },
     onNewUser: (data) => {
+      console.log('🆕 Новый пользователь:', data.user);
       addUser(data.user);
     },
     onOnlineUsers: (onlineUserIds) => {
-      // Обновляем статусы всех пользователей
+      console.log('📡 Получен список онлайн:', onlineUserIds);
+      
+      if (typeof setUsers !== 'function') {
+        console.error('❌ setUsers не является функцией!');
+        return;
+      }
+      
       const onlineSet = new Set(onlineUserIds);
       
-      // Обновляем в списке пользователей
-      setUsers(prev => prev.map(u => ({
-        ...u,
-        online: onlineSet.has(u.id)
-      })));
+      setUsers(prev => {
+        if (!Array.isArray(prev)) return [];
+        return prev.map(u => ({
+          ...u,
+          online: onlineSet.has(u.id)
+        }));
+      });
       
-      // 🔥 ФИКС: Обновляем статус выбранного пользователя
       if (selectedUser) {
         setSelectedUser(prev => ({
           ...prev,
@@ -111,11 +119,11 @@ function App() {
         getUsers: () => users,
         getSelectedUser: () => selectedUser,
         API_URL: 'http://localhost:3002',
-        getWebSocket: () => wsRef?.current || null
+        setUsers: setUsers
       };
       console.log('✅ Дебаг режим активирован! Используй window.__debug');
     }
-  }, [messages, users, selectedUser]);
+  }, [messages, users, selectedUser, setUsers]);
 
   // Подключаем WebSocket при авторизации
   useEffect(() => {

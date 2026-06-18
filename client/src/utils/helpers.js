@@ -42,16 +42,14 @@ export const formatLastSeen = (timestamp) => {
   });
 };
 
-// Парсинг файлового сообщения - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// Парсинг файлового сообщения
 export const parseFileMessage = (text) => {
   if (!text || typeof text !== 'string') return null;
   
-  // Проверка на удалённое сообщение
   if (text === '🗑️ Сообщение удалено') {
     return { type: 'deleted' };
   }
   
-  // --- ИЗОБРАЖЕНИЯ ---
   const imageMatch = text.match(/📷 Изображение:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (imageMatch) {
     return { 
@@ -61,7 +59,6 @@ export const parseFileMessage = (text) => {
     };
   }
   
-  // --- АУДИО ---
   const audioMatch = text.match(/🎵 Аудио:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (audioMatch) {
     return { 
@@ -71,7 +68,6 @@ export const parseFileMessage = (text) => {
     };
   }
   
-  // --- ВИДЕО ---
   const videoMatch = text.match(/🎬 Видео:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (videoMatch) {
     return { 
@@ -81,7 +77,6 @@ export const parseFileMessage = (text) => {
     };
   }
   
-  // --- ФАЙЛЫ ---
   const fileMatch = text.match(/📎 Файл:\s*([^\n]+?)\s+(https?:\/\/[^\s]+)/);
   if (fileMatch) {
     return { 

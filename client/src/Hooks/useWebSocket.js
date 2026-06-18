@@ -100,23 +100,19 @@ export const useWebSocket = ({
               break;
               
             case 'status':
+              console.log(`📡 Получен статус: пользователь ${data.userId} -> ${data.online ? 'онлайн' : 'оффлайн'}`);
               onStatus?.(data);
               break;
               
             case 'new_user':
+              console.log('🆕 Получен новый пользователь:', data.user);
               onNewUser?.(data);
               break;
               
-            case 'online_users': {
-              // 🔥 ОБРАБОТКА СПИСКА ОНЛАЙН ПОЛЬЗОВАТЕЛЕЙ
-              const onlineUserIds = data.users || [];
-              console.log(`📡 Получен список онлайн (${onlineUserIds.length} пользователей):`, onlineUserIds);
-              
-              if (onOnlineUsers) {
-                onOnlineUsers(onlineUserIds);
-              }
+            case 'online_users':
+              console.log('📡 Получен список онлайн:', data.users);
+              onOnlineUsers?.(data.users || []);
               break;
-            }
               
             case 'error':
               console.error('❌ Server error:', data.message);
@@ -136,13 +132,11 @@ export const useWebSocket = ({
         setIsConnected(false);
         setIsConnecting(false);
         
-        // Не переподключаемся при нормальном закрытии
         if (event.code === 1000 || event.code === 1001 || event.code === 1006) {
           console.log('⚠️ Переподключение отключено для кода:', event.code);
           return;
         }
 
-        // Переподключение с ограничением
         if (reconnectAttempts.current < maxReconnectAttempts) {
           const delay = 3000 * reconnectAttempts.current;
           console.log(`🔄 Переподключение через ${delay}ms...`);

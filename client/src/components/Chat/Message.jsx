@@ -76,13 +76,11 @@ const renderMessageContent = (msg, replyMessage) => {
     return <span className="deleted-message">🗑️ Сообщение удалено</span>;
   }
 
-  // Проверяем, является ли сообщение файлом
   const fileData = parseFileMessage(msg.text);
   if (fileData && fileData.type !== 'deleted') {
     return renderFileMessage(fileData);
   }
 
-  // Проверяем, есть ли ответ (через reply_to)
   const hasReply = replyMessage && !msg.text.includes('↩️ Ответ:');
 
   return (
@@ -119,7 +117,6 @@ const Message = memo(({
   const msgReactions = message.reactions || {};
   const reactionEntries = Object.entries(msgReactions);
   
-  // Находим сообщение, на которое отвечают
   const replyMessage = message.reply_to 
     ? allMessages.find(m => m.id === message.reply_to) 
     : null;
@@ -146,7 +143,6 @@ const Message = memo(({
   return (
     <div className={`message ${isOwn ? 'sent' : 'received'} ${isDeleted ? 'deleted' : ''}`}>
       <div className="message-wrapper">
-        {/* Message Actions */}
         {!isDeleted && (
           <div className="message-actions">
             <button onClick={() => onReply?.(message)} title="Ответить">↩️</button>
@@ -166,7 +162,6 @@ const Message = memo(({
           </div>
         )}
 
-        {/* Reactions Picker */}
         {!isDeleted && showReactionPicker && (
           <div className="reactions-picker">
             {REACTIONS_LIST.map(r => (
@@ -177,12 +172,10 @@ const Message = memo(({
           </div>
         )}
 
-        {/* Message Bubble */}
         <div className="bubble">
           {renderMessageContent(message, replyMessage)}
         </div>
 
-        {/* Message Footer */}
         <div className="message-footer">
           <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           {isOwn && !isDeleted && (
@@ -191,7 +184,6 @@ const Message = memo(({
           {message.edited && !isDeleted && <span className="edited-mark">(ред.)</span>}
         </div>
 
-        {/* Reactions Display */}
         {!isDeleted && reactionEntries.length > 0 && (
           <div className="reactions-display">
             {reactionEntries.map(([userId, reaction]) => (
