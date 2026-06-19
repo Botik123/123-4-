@@ -129,6 +129,3 @@ cd client && npm start
 - Максимальный размер файла: 50MB
 - База данных: SQLite в режиме WAL
 
-## 👨‍💻 Авторы
-
-NLP-Core-Team
