@@ -1632,6 +1632,72 @@ body {
 }
 
 /* ============================================
+   DARK THEME - SIDEBAR ELEMENTS
+   ============================================ */
+[data-theme="dark"] .user-profile {
+  background: #1e1e32;
+  border-color: #2a2a42;
+}
+
+[data-theme="dark"] .user-profile .username {
+  color: #e8e8f0;
+}
+
+[data-theme="dark"] .user-profile .user-status {
+  color: #a0a0b8;
+}
+
+[data-theme="dark"] .chat-item {
+  background: transparent;
+}
+
+[data-theme="dark"] .chat-item:hover {
+  background: #1a1a2e;
+}
+
+[data-theme="dark"] .chat-item.active {
+  background: #0a1a2a;
+  border-left-color: var(--tg-primary);
+}
+
+[data-theme="dark"] .chat-item .chat-name {
+  color: #e8e8f0;
+}
+
+[data-theme="dark"] .chat-item .chat-last-msg {
+  color: #a0a0b8;
+}
+
+[data-theme="dark"] .chat-item .chat-time {
+  color: #6b6b85;
+}
+
+[data-theme="dark"] .chats-list .section-title {
+  color: #6b6b85;
+}
+
+[data-theme="dark"] .chat-header {
+  background: #1e1e32;
+  border-color: #2a2a42;
+}
+
+[data-theme="dark"] .chat-header .chat-user-name {
+  color: #e8e8f0;
+}
+
+[data-theme="dark"] .chat-header .chat-user-status {
+  color: #a0a0b8;
+}
+
+[data-theme="dark"] .empty-state {
+  color: #6b6b85;
+}
+
+[data-theme="dark"] .empty-state h3 {
+  color: #a0a0b8;
+}
+
+/* ============================================
    МИКРО-ИНТЕРАКЦИИ (ПЛАВНОСТЬ)
    ============================================ */
 .chat-item {
