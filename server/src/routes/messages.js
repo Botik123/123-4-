@@ -60,6 +60,62 @@ router.post('/', async (req, res) => {
   }
 });
 
+// ==========================================
+// === FORWARD ROUTES (перед :messageId!) ===
+// ==========================================
+
+// Переслать сообщение
+router.post('/forward', async (req, res) => {
+  const { to, messageId } = req.body;
+  const userId = req.user.id;
+
+  if (!to || !messageId) {
+    return res.status(400).json({ error: 'Неверные данные' });
+  }
+
+  try {
+    const result = await messageService.forward(userId, to, messageId);
+    
+    if (result.error) {
+      return res.status(404).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error forwarding message:', error);
+    res.status(500).json({ error: 'Ошибка пересылки' });
+  }
+});
+
+// Переслать сообщение нескольким получателям
+router.post('/forward/multiple', async (req, res) => {
+  const { to, messageId } = req.body;
+  const userId = req.user.id;
+
+  if (!to || !Array.isArray(to) || to.length === 0 || !messageId) {
+    return res.status(400).json({ error: 'Неверные данные' });
+  }
+
+  try {
+    const results = await messageService.forwardToMultiple(userId, to, messageId);
+    const successCount = results.filter(r => r.success).length;
+    
+    res.json({ 
+      success: true, 
+      results,
+      successCount,
+      totalCount: to.length
+    });
+  } catch (error) {
+    console.error('Error forwarding messages:', error);
+    res.status(500).json({ error: 'Ошибка пересылки' });
+  }
+});
+
+// ==========================================
+// === MESSAGE ROUTES (:messageId) ===
+// ==========================================
+
 // Редактировать сообщение
 router.put('/:messageId', async (req, res) => {
   const { text, to } = req.body;
@@ -165,54 +221,6 @@ router.delete('/:messageId', async (req, res) => {
   } catch (error) {
     console.error('Error deleting message:', error);
     res.status(500).json({ error: 'Ошибка удаления' });
-  }
-});
-
-// Переслать сообщение
-router.post('/forward', async (req, res) => {
-  const { to, messageId } = req.body;
-  const userId = req.user.id;
-
-  if (!to || !messageId) {
-    return res.status(400).json({ error: 'Неверные данные' });
-  }
-
-  try {
-    const result = await messageService.forward(userId, to, messageId);
-    
-    if (result.error) {
-      return res.status(404).json(result);
-    }
-
-    res.json(result);
-  } catch (error) {
-    console.error('Error forwarding message:', error);
-    res.status(500).json({ error: 'Ошибка пересылки' });
-  }
-});
-
-// Переслать сообщение нескольким получателям
-router.post('/forward/multiple', async (req, res) => {
-  const { to, messageId } = req.body;
-  const userId = req.user.id;
-
-  if (!to || !Array.isArray(to) || to.length === 0 || !messageId) {
-    return res.status(400).json({ error: 'Неверные данные' });
-  }
-
-  try {
-    const results = await messageService.forwardToMultiple(userId, to, messageId);
-    const successCount = results.filter(r => r.success).length;
-    
-    res.json({ 
-      success: true, 
-      results,
-      successCount,
-      totalCount: to.length
-    });
-  } catch (error) {
-    console.error('Error forwarding messages:', error);
-    res.status(500).json({ error: 'Ошибка пересылки' });
   }
 });
 
