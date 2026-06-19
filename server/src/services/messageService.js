@@ -115,7 +115,7 @@ const markAsRead = async (from, to) => {
 };
 
 /**
- * Переслать сообщение
+ * Переслать сообщение одному получателю
  */
 const forward = async (from, to, messageId) => {
   const { v4: uuidv4 } = require('uuid');
@@ -157,10 +157,29 @@ const forward = async (from, to, messageId) => {
   };
 };
 
+/**
+ * Переслать сообщение нескольким получателям
+ */
+const forwardToMultiple = async (from, recipientIds, messageId) => {
+  const results = [];
+  
+  for (const to of recipientIds) {
+    try {
+      const result = await forward(from, to, messageId);
+      results.push({ userId: to, success: true, ...result });
+    } catch (error) {
+      results.push({ userId: to, success: false, error: error.message });
+    }
+  }
+  
+  return results;
+};
+
 module.exports = {
   createAndSend,
   markAsRead,
   forward,
+  forwardToMultiple,
   isMessageDuplicate,
   markMessageAsProcessed
 };

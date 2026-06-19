@@ -9,6 +9,8 @@ import './App.css';
 import AuthForm from './components/Auth/AuthForm';
 import Sidebar from './components/Sidebar/Sidebar';
 import ChatArea from './components/Chat/ChatArea';
+import ForwardModal from './components/Chat/ForwardModal';
+import ForwardModalCSS from './components/Chat/ForwardModal.css?inline';
 import { useAuth } from './components/Hooks/useAuth';
 import { useWebSocket } from './components/Hooks/useWebSocket';
 import { useMessages } from './components/Hooks/useMessages';
@@ -23,6 +25,10 @@ function App() {
   const [replyTo, setReplyTo] = useState(null); // Сообщение для ответа
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false); // Мобильная версия
   const isConnectingRef = useRef(false); // Флаг подключения WebSocket
+
+  // Состояние для модалки пересылки
+  const [forwardModalOpen, setForwardModalOpen] = useState(false);
+  const [messageToForward, setMessageToForward] = useState(null);
 
   // === AUTH HOOK ===
   const { user, loading: authLoading, login, register, logout } = useAuth();
@@ -50,6 +56,7 @@ function App() {
     editMessage,
     deleteMessage,
     forwardMessage,
+    forwardMessageToMultiple,
     addReaction,
     addMessage,
     updateMessage,
@@ -355,10 +362,25 @@ function App() {
     playSendSound();
   };
 
-  // Пересылка сообщения
-  const handleForwardMessage = (message) => {
-    if (!selectedUser) return;
-    forwardMessage(selectedUser.id, message.id);
+  // Открыть модалку пересылки
+  const handleOpenForwardModal = (message) => {
+    setMessageToForward(message);
+    setForwardModalOpen(true);
+  };
+
+  // Переслать сообщение нескольким получателям
+  const handleForwardToMultiple = async (message, recipientIds) => {
+    if (!message || !recipientIds || recipientIds.length === 0) return;
+    
+    console.log(`📎 Пересылка сообщения ${message.id} ${recipientIds.length} получателям`);
+    
+    try {
+      await forwardMessageToMultiple(recipientIds, message.id);
+      alert(`✅ Сообщение переслано ${recipientIds.length} получателям`);
+    } catch (error) {
+      console.error('Ошибка пересылки:', error);
+      alert('❌ Ошибка пересылки');
+    }
   };
 
   // Редактирование сообщения
@@ -435,7 +457,7 @@ function App() {
         typing={false}
         replyTo={replyTo}
         onReply={setReplyTo}
-        onForward={handleForwardMessage}
+        onForward={handleOpenForwardModal}
         onEdit={handleEditMessage}
         onDelete={handleDeleteMessage}
         onReaction={handleAddReaction}
@@ -447,6 +469,19 @@ function App() {
         onBack={handleBack}
         isMobileOpen={isMobileChatOpen}
         loading={messagesLoading}
+      />
+      
+      {/* Модалка пересылки */}
+      <ForwardModal
+        isOpen={forwardModalOpen}
+        onClose={() => {
+          setForwardModalOpen(false);
+          setMessageToForward(null);
+        }}
+        message={messageToForward}
+        users={users}
+        currentUserId={user?.id}
+        onForward={handleForwardToMultiple}
       />
     </div>
   );

@@ -191,6 +191,31 @@ router.post('/forward', async (req, res) => {
   }
 });
 
+// Переслать сообщение нескольким получателям
+router.post('/forward/multiple', async (req, res) => {
+  const { to, messageId } = req.body;
+  const userId = req.user.id;
+
+  if (!to || !Array.isArray(to) || to.length === 0 || !messageId) {
+    return res.status(400).json({ error: 'Неверные данные' });
+  }
+
+  try {
+    const results = await messageService.forwardToMultiple(userId, to, messageId);
+    const successCount = results.filter(r => r.success).length;
+    
+    res.json({ 
+      success: true, 
+      results,
+      successCount,
+      totalCount: to.length
+    });
+  } catch (error) {
+    console.error('Error forwarding messages:', error);
+    res.status(500).json({ error: 'Ошибка пересылки' });
+  }
+});
+
 // Поставить реакцию
 router.post('/reaction', async (req, res) => {
   const { messageId, reaction, to } = req.body;

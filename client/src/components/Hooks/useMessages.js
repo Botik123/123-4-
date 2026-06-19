@@ -204,6 +204,25 @@ export const useMessages = (userId, otherUserId) => {
   }, [sendMessage]);
 
   /**
+   * Пересылка сообщения нескольким получателям (через API)
+   */
+  const forwardMessageToMultiple = useCallback(async (recipientIds, messageId) => {
+    if (!Array.isArray(recipientIds) || recipientIds.length === 0) {
+      console.error('forwardMessageToMultiple: invalid recipients', recipientIds);
+      return;
+    }
+
+    try {
+      const results = await messagesAPI.forwardMultiple(recipientIds, messageId);
+      console.log(`📎 forwardMessageToMultiple: results=`, results);
+      return results;
+    } catch (error) {
+      console.error('Error forwarding message to multiple:', error);
+      throw error;
+    }
+  }, []);
+
+  /**
    * Добавление/удаление реакции на сообщение
    */
   const addReaction = useCallback(async (messageId, reaction, to) => {
@@ -348,6 +367,7 @@ export const useMessages = (userId, otherUserId) => {
     editMessage,
     deleteMessage,
     forwardMessage,
+    forwardMessageToMultiple,
     addReaction,
     addMessage,
     updateMessage,
