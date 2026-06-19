@@ -5,6 +5,8 @@ package-lock.json
 # База данных
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 
 # Загрузки
 server/uploads/
@@ -16,6 +18,7 @@ server/uploads/
 *.pdf
 *.doc
 *.docx
+
 
 # Логи
 *.log
@@ -38,3 +41,4 @@ server/dist/
 # Переменные окружения
 .env
 .env.local
+
