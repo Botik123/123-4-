@@ -372,14 +372,15 @@ function App() {
   const handleForwardToMultiple = async (message, recipientIds) => {
     if (!message || !recipientIds || recipientIds.length === 0) return;
     
-    console.log(`📎 Пересылка сообщения ${message.id} ${recipientIds.length} получателям`);
+    console.log(`📎 handleForwardToMultiple: message=${message.id}, recipients=${JSON.stringify(recipientIds)}`);
     
     try {
-      await forwardMessageToMultiple(recipientIds, message.id);
+      const results = await forwardMessageToMultiple(recipientIds, message.id);
+      console.log(`✅ handleForwardToMultiple: results=`, results);
       alert(`✅ Сообщение переслано ${recipientIds.length} получателям`);
     } catch (error) {
-      console.error('Ошибка пересылки:', error);
-      alert('❌ Ошибка пересылки');
+      console.error('❌ Ошибка пересылки:', error);
+      alert(`❌ Ошибка пересылки: ${error.message || 'Неизвестная ошибка'}`);
     }
   };
 

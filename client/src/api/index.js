@@ -154,11 +154,13 @@ export const messagesAPI = {
    * @param {string[]} to - Массив ID получателей
    * @param {string} messageId - ID исходного сообщения
    */
-  forwardMultiple: (to, messageId) =>
-    request('/messages/forward/multiple', {
+  forwardMultiple: (to, messageId) => {
+    console.log('📎 API forwardMultiple: to=', to, 'messageId=', messageId);
+    return request('/messages/forward/multiple', {
       method: 'POST',
       body: JSON.stringify({ to, messageId })
-    }),
+    });
+  },
   
   /**
    * Добавить реакцию

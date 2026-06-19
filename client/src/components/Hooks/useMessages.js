@@ -212,12 +212,16 @@ export const useMessages = (userId, otherUserId) => {
       return;
     }
 
+    console.log(`📎 forwardMessageToMultiple: recipients=${recipientIds}, messageId=${messageId}`);
+
     try {
       const results = await messagesAPI.forwardMultiple(recipientIds, messageId);
-      console.log(`📎 forwardMessageToMultiple: results=`, results);
+      console.log(`📎 forwardMessageToMultiple: success, results=`, results);
       return results;
     } catch (error) {
-      console.error('Error forwarding message to multiple:', error);
+      console.error('❌ Error forwarding message to multiple:', error);
+      console.error('  - recipientIds:', recipientIds);
+      console.error('  - messageId:', messageId);
       throw error;
     }
   }, []);
