@@ -153,16 +153,19 @@ function App() {
       }
     },
     // Список онлайн пользователей (при подключении)
-    onOnlineUsers: (onlineUserIds) => {
-      console.log(`📡 onOnlineUsers:`, onlineUserIds, `users.length=${users.length}`);
+    onOnlineUsers: (onlineUserIdsList) => {
+      console.log(`📡 onOnlineUsers:`, onlineUserIdsList, `users.length=${users.length}`);
       
       // Сохраняем онлайн ID
-      onlineUserIds.current = new Set(onlineUserIds);
-      console.log(`  📝 Сохранено ${onlineUserIds.length} онлайн ID`);
+      onlineUserIds.current = new Set(onlineUserIdsList);
+      console.log(`  📝 Сохранено ${onlineUserIdsList.length} онлайн ID:`, Array.from(onlineUserIds.current));
       
       // Применяем если users уже загружен
       if (users && users.length > 0) {
+        console.log(`  🚀 Применяем статусы сразу`);
         applyOnlineStatuses(users);
+      } else {
+        console.log(`  ⏳ users ещё не загружен, ждём useEffect`);
       }
       
       // Обновляем selectedUser
@@ -178,20 +181,33 @@ function App() {
 
   // Применить онлайн статусы
   const applyOnlineStatuses = useCallback((usersList) => {
-    if (!usersList || usersList.length === 0) return;
+    if (!usersList || usersList.length === 0) {
+      console.warn('⚠️ applyOnlineStatuses: usersList пустой');
+      return;
+    }
     
-    console.log(`🔄 applyOnlineStatuses: ${onlineUserIds.current.size} онлайн для ${usersList.length} пользователей`);
+    console.log(`🔄 applyOnlineStatuses:`, {
+      onlineCount: onlineUserIds.current.size,
+      onlineIds: Array.from(onlineUserIds.current),
+      usersCount: usersList.length,
+      users: usersList.map(u => ({ id: u.id, username: u.username, online: u.online }))
+    });
     
     setUsers(prev => {
-      if (!prev || prev.length === 0) return prev;
+      if (!prev || prev.length === 0) {
+        console.warn('⚠️ applyOnlineStatuses: prev пустой');
+        return prev;
+      }
       
+      let changed = 0;
       const updated = prev.map(u => {
         const isOnline = onlineUserIds.current.has(u.id);
         // Не обновляем текущего пользователя
         if (u.id === user?.id) return u;
         
         if (u.online !== isOnline) {
-          console.log(`  📍 ${u.username}: ${u.online} -> ${isOnline}`);
+          changed++;
+          console.log(`  📍 ${u.username} (${u.id}): ${u.online} -> ${isOnline}`);
           return {
             ...u,
             online: isOnline,
@@ -201,7 +217,11 @@ function App() {
         return u;
       });
       
-      console.log(`  ✅ Статусы применены`);
+      if (changed === 0) {
+        console.log('  ℹ️ Нет изменений статусов');
+      } else {
+        console.log(`  ✅ Изменено ${changed} статусов`);
+      }
       return updated;
     });
   }, [user?.id]);
@@ -232,8 +252,12 @@ function App() {
     console.log(`🔄 useEffect users: length=${users?.length || 0}, onlineIds.size=${onlineUserIds.current.size}`);
     
     if (users && users.length > 0 && onlineUserIds.current.size > 0) {
-      console.log(`🔄 users загружен (${users.length}), применяем статусы`);
+      console.log(`  🚀 ВЫЗЫВАЕМ applyOnlineStatuses`);
       applyOnlineStatuses(users);
+    } else if (!users || users.length === 0) {
+      console.log(`  ⏳ users ещё не загружен`);
+    } else {
+      console.log(`  ⏳ onlineUserIds пуст, ждём onOnlineUsers`);
     }
   }, [users, applyOnlineStatuses]);
 
