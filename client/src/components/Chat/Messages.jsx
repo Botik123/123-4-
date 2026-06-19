@@ -19,6 +19,7 @@ const Messages = ({
   const [userScrolled, setUserScrolled] = useState(false);
   const [prevMessagesLength, setPrevMessagesLength] = useState(messages.length);
   const [isFirstLoad, setIsFirstLoad] = useState(true);
+  const prevCurrentUserIdRef = useRef(null);
 
   const isAtBottom = () => {
     const container = containerRef.current;
@@ -39,6 +40,7 @@ const Messages = ({
     }
   };
 
+  // 🔥 Прокрутка вниз при первом запуске
   useEffect(() => {
     if (messages.length > 0 && isFirstLoad) {
       const timer = setTimeout(() => {
@@ -49,6 +51,21 @@ const Messages = ({
     }
   }, [messages, isFirstLoad]);
 
+  // 🔥 Прокрутка вниз при смене чата
+  useEffect(() => {
+    // Проверяем что текущий пользователь изменился (сменили чат)
+    if (prevCurrentUserIdRef.current !== currentUserId && messages.length > 0) {
+      console.log(`🔄 Смена чата: прокрутка вниз (${messages.length} сообщений)`);
+      const timer = setTimeout(() => {
+        scrollToBottom('auto');
+        setUserScrolled(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    prevCurrentUserIdRef.current = currentUserId;
+  }, [currentUserId, messages.length]);
+
+  // 🔥 Прокрутка при новых сообщениях
   useEffect(() => {
     if (messages.length > prevMessagesLength) {
       const lastMsg = messages[messages.length - 1];
@@ -61,11 +78,6 @@ const Messages = ({
       setPrevMessagesLength(messages.length);
     }
   }, [messages, currentUserId, userScrolled]);
-
-  useEffect(() => {
-    setIsFirstLoad(true);
-    setUserScrolled(false);
-  }, [currentUserId]);
 
   // 🔥 ПОКАЗЫВАЕМ СКЕЛЕТОН ВО ВРЕМЯ ЗАГРУЗКИ
   if (loading) {
