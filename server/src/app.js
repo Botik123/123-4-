@@ -8,6 +8,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
+const cookieParser = require('cookie-parser');
 
 // Импорт маршрутов
 const authRoutes = require('./routes/auth');
@@ -19,9 +20,12 @@ const app = express();
 
 // === MIDDLEWARE ===
 
+// Парсиня cookie
+app.use(cookieParser());
+
 // Разрешаем CORS для всех origin (в продакшене ограничить!)
 app.use(cors({
-  origin: true,
+  origin: 'http://localhost:3000',
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
 }));

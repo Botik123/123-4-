@@ -2,10 +2,27 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db/queries');
-const { generateToken } = require('../middleware/auth');
+const { generateToken, generateRefreshToken } = require('../middleware/auth');
 const { sanitizeBody } = require('../middleware/sanitize');
 
 const router = express.Router();
+
+// Настройка куки
+const setAuthCookies = (res, accessToken, refreshToken) => {
+  res.cookie('accessToken', accessToken, {
+    httpOnly: true,
+    secure: false, // false для localhost, true для production
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 дней
+  });
+  
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: false,
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 дней
+  });
+};
 
 router.post('/register', sanitizeBody, async (req, res) => {
   const { username, password } = req.body;
@@ -38,12 +55,14 @@ router.post('/register', sanitizeBody, async (req, res) => {
     await db.createUser(userId, username, hashedPassword);
 
     const token = generateToken(userId);
+    const refreshToken = generateRefreshToken(userId);
 
     const { broadcastNewUser } = require('../socket');
     broadcastNewUser({ id: userId, username });
 
+    setAuthCookies(res, token, refreshToken);
+
     res.json({
-      token,
       user: { id: userId, username }
     });
 
@@ -72,9 +91,11 @@ router.post('/login', sanitizeBody, async (req, res) => {
     }
 
     const token = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
+
+    setAuthCookies(res, token, refreshToken);
 
     res.json({
-      token,
       user: {
         id: user.id,
         username: user.username,
@@ -89,3 +110,55 @@ router.post('/login', sanitizeBody, async (req, res) => {
 });
 
 module.exports = router;
+
+// Проверка текущего пользователя
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await db.getUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+    
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        avatar: user.avatar
+      }
+    });
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// Logout (очистка куки)
+router.post('/logout', (req, res) => {
+  res.clearCookie('accessToken');
+  res.clearCookie('refreshToken');
+  res.json({ success: true });
+});
+
+// Refresh endpoint
+router.post('/refresh', async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+  if (!refreshToken) {
+    return res.status(401).json({ error: 'Нет refresh токена' });
+  }
+
+  try {
+    const jwt = require('jsonwebtoken');
+    const config = require('../config');
+    const decoded = jwt.verify(refreshToken, config.jwtSecret);
+    
+    const newAccessToken = generateToken(decoded.userId);
+    const newRefreshToken = generateRefreshToken(decoded.userId);
+    
+    setAuthCookies(res, newAccessToken, newRefreshToken);
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(401).json({ error: 'Недействительный refresh токен' });
+  }
+});

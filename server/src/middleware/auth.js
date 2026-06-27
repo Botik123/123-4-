@@ -17,6 +17,15 @@ const generateToken = (userId) => {
 };
 
 /**
+ * Генерирует refresh токен (длинноживущий)
+ * @param {string} userId - ID пользователя
+ * @returns {string} Refresh токен
+ */
+const generateRefreshToken = (userId) => {
+  return jwt.sign({ userId }, config.jwtSecret, { expiresIn: '30d' });
+};
+
+/**
  * Верифицирует JWT токен
  * @param {string} token - Токен для проверки
  * @returns {object|null} Декодированные данные или null при ошибке
@@ -37,19 +46,19 @@ const verifyToken = (token) => {
 const authMiddleware = (req, res, next) => {
   // Проверка наличия заголовка
   const authHeader = req.headers.authorization;
-  console.log(`🔐 Auth check: ${req.method} ${req.path}, Auth header: ${authHeader ? 'present' : 'missing'}`);
+  const cookie = req.cookies?.accessToken;
   
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.warn('⚠️ Нет токена или неверный формат');
+  const token = authHeader?.startsWith('Bearer ') 
+    ? authHeader.split(' ')[1] 
+    : cookie;
+  
+  if (!token) {
     return res.status(401).json({ error: 'Не авторизован' });
   }
 
-  // Извлечение токена из "Bearer <token>"
-  const token = authHeader.split(' ')[1];
   const decoded = verifyToken(token);
 
   if (!decoded) {
-    console.warn('⚠️ Недействительный токен');
     return res.status(401).json({ error: 'Недействительный токен' });
   }
 
@@ -58,8 +67,7 @@ const authMiddleware = (req, res, next) => {
     id: decoded.userId
   };
   
-  console.log(`✅ Auth success: userId=${decoded.userId}`);
   next();
 };
 
-module.exports = { generateToken, verifyToken, authMiddleware };
+module.exports = { generateToken, generateRefreshToken, verifyToken, authMiddleware };

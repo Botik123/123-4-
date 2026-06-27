@@ -254,6 +254,23 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Загружаем пользователей при восстановлении сессии (если пользователь уже авторизован)
+  useEffect(() => {
+    if (user && users.length === 0) {
+      fetchUsers(user.id);
+    }
+  }, [user]);
+
+  // Загружаем пользователей при успешной регистрации
+  useEffect(() => {
+    if (user && users.length === 0) {
+      const timer = setTimeout(() => {
+        fetchUsers(user.id);
+      }, 200); // Небольшая задержка чтобы broadcastNewUser успел сработать
+      return () => clearTimeout(timer);
+    }
+  }, [user?.id]); // Зависимость только от id чтобы не зациклить
+
   // Применяем статусы после загрузки users
   useEffect(() => {
     console.log(`🔄 useEffect users: length=${users?.length || 0}, onlineIds.size=${onlineUserIds.current.size}`);

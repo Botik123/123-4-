@@ -19,7 +19,7 @@ const getToken = () => localStorage.getItem('token');
  * @throws {Error} Ошибка запроса
  */
 const request = async (endpoint, options = {}) => {
-  const token = getToken();
+  const token = localStorage.getItem('token');
   
   const headers = {
     'Content-Type': 'application/json',
@@ -34,7 +34,8 @@ const request = async (endpoint, options = {}) => {
   try {
     response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
-      headers
+      headers,
+      credentials: 'include' // Отправляем куки
     });
   } catch (networkError) {
     console.error('Network error:', networkError.message);
