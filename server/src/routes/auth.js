@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db/queries');
-const { generateToken, generateRefreshToken } = require('../middleware/auth');
+const { generateToken, generateRefreshToken, authMiddleware } = require('../middleware/auth');
 const { sanitizeBody } = require('../middleware/sanitize');
 
 const router = express.Router();
