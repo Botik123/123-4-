@@ -42,6 +42,7 @@ export const useAuth = () => {
   const login = async (username, password) => {
     try {
       const data = await authAPI.login(username, password);
+      localStorage.setItem('token', data.token);
       setUser(data.user);
       return { success: true };
     } catch (error) {
@@ -58,6 +59,7 @@ export const useAuth = () => {
   const register = async (username, password) => {
     try {
       const data = await authAPI.register(username, password);
+      localStorage.setItem('token', data.token);
       setUser(data.user);
       return { success: true };
     } catch (error) {

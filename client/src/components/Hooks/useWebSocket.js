@@ -72,12 +72,14 @@ export const useWebSocket = ({
 
     const token = localStorage.getItem('token');
     if (!token) {
-      console.warn('⚠️ Нет токена');
+      console.warn('⚠️ Нет токена для WebSocket');
+      setIsConnecting(false);
       return;
     }
 
     if (reconnectAttempts.current >= maxReconnectAttempts) {
       console.warn('⚠️ Достигнут лимит попыток');
+      setIsConnecting(false);
       return;
     }
 
@@ -87,7 +89,7 @@ export const useWebSocket = ({
     try {
       console.log(`🔌 Подключение к WebSocket (попытка ${reconnectAttempts.current}/${maxReconnectAttempts})`);
       
-      const socket = new WebSocket(WS_URL);
+      const socket = new WebSocket(`${WS_URL}?token=${token}`);
 
       socket.onopen = () => {
         if (!isMounted.current) return;

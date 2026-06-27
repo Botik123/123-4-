@@ -28,8 +28,51 @@ const setupWebSocket = (server) => {
     let currentUserId = null;
     let currentRoom = null;
 
+    // Получаем токен из URL параметра
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const tokenFromUrl = url.searchParams.get('token');
+    
+    // Автоматическая аутентификация через URL параметр
+    if (tokenFromUrl) {
+      const decoded = verifyToken(tokenFromUrl);
+      if (decoded) {
+        currentUserId = decoded.userId;
+        
+        // Заменяем старое соединение если есть
+        if (clients.has(currentUserId)) {
+          const oldWs = clients.get(currentUserId);
+          if (oldWs && oldWs.readyState === WebSocket.OPEN) {
+            oldWs.close(1000, 'Duplicate connection');
+          }
+        }
+        
+        clients.set(currentUserId, ws);
+        
+        // Подтверждение аутентификации
+        ws.send(JSON.stringify({ 
+          type: 'auth_success', 
+          userId: currentUserId 
+        }));
+
+        // Уведомляем всех о статусе пользователя
+        broadcastStatus(currentUserId, true);
+        
+        // Отправляем текущему пользователю статусы всех кто уже онлайн
+        sendAllStatuses(ws);
+        
+        // Уведомляем всех о списке онлайн
+        broadcastOnlineUsers();
+        
+        console.log(`✅ Пользователь ${currentUserId} авторизован через URL (клиентов: ${clients.size})`);
+      } else {
+        ws.send(JSON.stringify({ type: 'error', message: 'Invalid token' }));
+        ws.close(1008, 'Invalid token');
+        return;
+      }
+    }
+    
     // ==========================================
-    // 🔥 АУТЕНТИФИКАЦИЯ ПОЛЬЗОВАТЕЛЯ
+    // 🔥 АУТЕНТИФИКАЦИЯ ПОЛЬЗОВАТЕЛЯ (через сообщение)
     // ==========================================
     ws.on('message', async (data) => {
       try {

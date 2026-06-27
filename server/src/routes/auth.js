@@ -63,6 +63,7 @@ router.post('/register', sanitizeBody, async (req, res) => {
     setAuthCookies(res, token, refreshToken);
 
     res.json({
+      token,
       user: { id: userId, username }
     });
 
@@ -96,6 +97,7 @@ router.post('/login', sanitizeBody, async (req, res) => {
     setAuthCookies(res, token, refreshToken);
 
     res.json({
+      token,
       user: {
         id: user.id,
         username: user.username,

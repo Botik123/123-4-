@@ -13,14 +13,18 @@ router.get('/', async (req, res) => {
     
     // Получаем список онлайн пользователей из WebSocket клиентов
     const { clients } = require('../socket');
-    const onlineClientIds = new Set(clients.keys());
+    const onlineClientIds = Array.from(clients.keys());
+    
+    console.log(`👥 /users: userId=${userId}, всего пользователей=${users.length}, онлайн=${onlineClientIds.length}`);
+    console.log(`  📡 Онлайн клиенты: ${onlineClientIds.join(', ') || 'нет'}`);
     
     const usersWithStatus = users.map(user => ({
       ...user,
-      online: onlineClientIds.has(user.id),
-      last_seen: onlineClientIds.has(user.id) ? Date.now() : null
+      online: onlineClientIds.includes(user.id),
+      last_seen: onlineClientIds.includes(user.id) ? Date.now() : null
     }));
 
+    console.log(`  ✅ Возвращаем статусы:`, usersWithStatus.map(u => ({ id: u.id, username: u.username, online: u.online })));
     res.json(usersWithStatus);
   } catch (error) {
     console.error('Error loading users:', error);
