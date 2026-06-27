@@ -11,10 +11,14 @@ router.get('/', async (req, res) => {
     const userId = req.user.id;
     const users = await db.getAllUsers(userId);
     
+    // Получаем список онлайн пользователей из WebSocket клиентов
+    const { clients } = require('../socket');
+    const onlineClientIds = new Set(clients.keys());
+    
     const usersWithStatus = users.map(user => ({
       ...user,
-      online: false,
-      last_seen: null
+      online: onlineClientIds.has(user.id),
+      last_seen: onlineClientIds.has(user.id) ? Date.now() : null
     }));
 
     res.json(usersWithStatus);

@@ -240,6 +240,7 @@ function App() {
   // Подключаем WebSocket при авторизации пользователя
   useEffect(() => {
     if (user && !isConnectingRef.current) {
+      console.log(`🔌 Подключение WebSocket: ${user.id}`);
       isConnectingRef.current = true;
       // Сначала загружаем пользователей, потом подключаем WebSocket
       fetchUsers(user.id);
@@ -254,13 +255,6 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Загружаем пользователей при восстановлении сессии (если пользователь уже авторизован)
-  useEffect(() => {
-    if (user && users.length === 0) {
-      fetchUsers(user.id);
-    }
-  }, [user]);
-
   // Загружаем пользователей при успешной регистрации
   useEffect(() => {
     if (user && users.length === 0) {
@@ -269,7 +263,7 @@ function App() {
       }, 200); // Небольшая задержка чтобы broadcastNewUser успел сработать
       return () => clearTimeout(timer);
     }
-  }, [user?.id]); // Зависимость только от id чтобы не зациклить
+  }, [user?.id, users.length]); // Зависимость от users.length чтобы сработать после регистрации
 
   // Применяем статусы после загрузки users
   useEffect(() => {
